@@ -16,6 +16,15 @@ export interface TranscriptionStreamMessage {
   paraphrased_verses?: ParaphrasedVerse[];
 }
 
+export type TranscriptionStatusUpdate = "recording" | "stopped";
+
+export interface TranscriptionStatusMessage {
+  type: "transcription_status";
+  status: TranscriptionStatusUpdate;
+  timestamp: number;
+  reason?: string;
+}
+
 /**
  * Broadcast a transcription stream message to all Live Slides WebSocket clients (/ws).
  *
@@ -24,6 +33,13 @@ export interface TranscriptionStreamMessage {
  */
 export async function broadcastTranscriptionStreamMessage(
   msg: TranscriptionStreamMessage
+): Promise<void> {
+  const json = JSON.stringify(msg);
+  await invoke("broadcast_live_slides_message", { message: json });
+}
+
+export async function broadcastTranscriptionStatusMessage(
+  msg: TranscriptionStatusMessage
 ): Promise<void> {
   const json = JSON.stringify(msg);
   await invoke("broadcast_live_slides_message", { message: json });

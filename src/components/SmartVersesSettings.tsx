@@ -1856,8 +1856,11 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                   style={inputStyle}
                 />
                 <p style={helpTextStyle}>
-                  Show a continuation prompt at this limit (default 120 minutes). If
-                  no response in 1 minute, transcription auto-stops.
+                  At this limit (default 120 minutes), we prompt you to continue so you
+                  don't run up API charges if transcription is left on. Transcription
+                  stops at this time unless you choose to continue; if there's no
+                  response within 1 minute, it stops automatically. This limit doesn't
+                  apply when using a remote transcription source.
                 </p>
               </div>
 
