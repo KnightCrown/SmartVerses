@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { KeyPoint, ParaphrasedVerse, TranscriptionSegment } from "../types/smartVerses";
+import type { TranscriptionStatusUpdate } from "../types/liveSlides";
 
 export type TranscriptionStreamKind = "interim" | "final";
 
@@ -16,7 +17,7 @@ export interface TranscriptionStreamMessage {
   paraphrased_verses?: ParaphrasedVerse[];
 }
 
-export type TranscriptionStatusUpdate = "recording" | "stopped";
+export type { TranscriptionStatusUpdate } from "../types/liveSlides";
 
 export interface TranscriptionStatusMessage {
   type: "transcription_status";
