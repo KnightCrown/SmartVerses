@@ -464,7 +464,6 @@ const RecorderPage: React.FC = () => {
             console.error("[Cleanup] Failed to finalize video recording:", e)
           );
         videoStreamingFilePathRef.current = null;
-        videoChunkPendingRef.current = 0;
       }
       if (videoStreamRef.current) {
         videoStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -487,7 +486,6 @@ const RecorderPage: React.FC = () => {
           );
         audioStreamingTempPathRef.current = null;
         audioFinalMp3PathRef.current = null;
-        audioChunkPendingRef.current = 0;
       }
       if (audioStreamRef.current) {
         audioStreamRef.current.getTracks().forEach((t) => t.stop());
