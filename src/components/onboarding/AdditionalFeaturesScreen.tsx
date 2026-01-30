@@ -84,7 +84,10 @@ const AdditionalFeaturesScreen: React.FC<AdditionalFeaturesScreenProps> = ({
         {/* Feature Cards with Toggles */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-3)" }}>
           {/* Smart Timers */}
-          <div className="onboarding-toggle">
+          <div
+            className="onboarding-toggle"
+            onClick={() => handleToggle("smartTimersEnabled", !smartTimersEnabled)}
+          >
             <div style={{ flex: 1 }}>
               <div
                 style={{
@@ -113,20 +116,14 @@ const AdditionalFeaturesScreen: React.FC<AdditionalFeaturesScreenProps> = ({
                 intelligently.
               </p>
             </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={smartTimersEnabled}
-                onChange={(e) =>
-                  handleToggle("smartTimersEnabled", e.target.checked)
-                }
-              />
-              <span className="toggle-slider"></span>
-            </label>
+            <div className={`toggle-switch ${smartTimersEnabled ? "active" : ""}`}></div>
           </div>
 
           {/* Smart Slides */}
-          <div className="onboarding-toggle">
+          <div
+            className="onboarding-toggle"
+            onClick={() => handleToggle("smartSlidesEnabled", !smartSlidesEnabled)}
+          >
             <div style={{ flex: 1 }}>
               <div
                 style={{
@@ -154,20 +151,14 @@ const AdditionalFeaturesScreen: React.FC<AdditionalFeaturesScreenProps> = ({
                 Features for generating and managing slides more efficiently.
               </p>
             </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={smartSlidesEnabled}
-                onChange={(e) =>
-                  handleToggle("smartSlidesEnabled", e.target.checked)
-                }
-              />
-              <span className="toggle-slider"></span>
-            </label>
+            <div className={`toggle-switch ${smartSlidesEnabled ? "active" : ""}`}></div>
           </div>
 
           {/* Recorder */}
-          <div className="onboarding-toggle">
+          <div
+            className="onboarding-toggle"
+            onClick={() => handleToggle("recorderEnabled", !recorderEnabled)}
+          >
             <div style={{ flex: 1 }}>
               <div
                 style={{
@@ -195,18 +186,14 @@ const AdditionalFeaturesScreen: React.FC<AdditionalFeaturesScreenProps> = ({
                 Capture audio or services directly inside SmartVerses for later use.
               </p>
             </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={recorderEnabled}
-                onChange={(e) => handleToggle("recorderEnabled", e.target.checked)}
-              />
-              <span className="toggle-slider"></span>
-            </label>
+            <div className={`toggle-switch ${recorderEnabled ? "active" : ""}`}></div>
           </div>
 
           {/* Live Testimonies */}
-          <div className="onboarding-toggle">
+          <div
+            className="onboarding-toggle"
+            onClick={() => handleToggle("liveTestimoniesEnabled", !liveTestimoniesEnabled)}
+          >
             <div style={{ flex: 1 }}>
               <div
                 style={{
@@ -235,16 +222,7 @@ const AdditionalFeaturesScreen: React.FC<AdditionalFeaturesScreenProps> = ({
                 during services.
               </p>
             </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={liveTestimoniesEnabled}
-                onChange={(e) =>
-                  handleToggle("liveTestimoniesEnabled", e.target.checked)
-                }
-              />
-              <span className="toggle-slider"></span>
-            </label>
+            <div className={`toggle-switch ${liveTestimoniesEnabled ? "active" : ""}`}></div>
           </div>
         </div>
 
