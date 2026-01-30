@@ -957,7 +957,7 @@ const SmartVersesPage: React.FC = () => {
           if (!isAISearchEnabled) {
             errorMsg += " Try enabling AI Search below for better results.";
           } else if (searchMethod === "text" && providerForMessage === "offline") {
-            errorMsg += " Offline search didn't find a match. Try lowering the confidence threshold or switch to an AI provider.";
+            errorMsg += " Offline Search (Experimental) didn't find a match. Try lowering the confidence threshold or switch to an AI provider.";
           } else if (searchMethod === "text") {
             errorMsg += " AI Search is enabled but not configured. Go to Settings → SmartVerses to configure your AI provider.";
           } else {
@@ -1665,7 +1665,7 @@ const SmartVersesPage: React.FC = () => {
               paraphrasedVerses.length === 0 &&
               (settings.enableParaphraseDetection || settings.enableKeyPointExtraction)
             ) {
-              const paraphraseMode = settings.paraphraseDetectionMode || "hybrid";
+              const paraphraseMode = settings.paraphraseDetectionMode || "offline";
               const allowOfflineParaphrase =
                 settings.enableParaphraseDetection && paraphraseMode !== "ai";
               const allowAIParaphrase =
@@ -1995,7 +1995,7 @@ const SmartVersesPage: React.FC = () => {
                 handleGoLive(directRefs[0]);
               }
             } else if (settings.enableParaphraseDetection || settings.enableKeyPointExtraction) {
-              const paraphraseMode = settings.paraphraseDetectionMode || "hybrid";
+              const paraphraseMode = settings.paraphraseDetectionMode || "offline";
               const allowOfflineParaphrase =
                 settings.enableParaphraseDetection && paraphraseMode !== "ai";
               const allowAIParaphrase =

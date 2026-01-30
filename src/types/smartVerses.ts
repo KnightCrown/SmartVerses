@@ -330,13 +330,13 @@ export const DEFAULT_SMART_VERSES_SETTINGS: SmartVersesSettings = {
   bibleSearchModel: 'llama-3.3-70b-versatile',
   bibleSearchConfidenceThreshold: 0.6,
   enableParaphraseDetection: true,
-  paraphraseDetectionMode: 'hybrid',
+  paraphraseDetectionMode: 'offline',
   enableKeyPointExtraction: false,
   keyPointExtractionInstructions:
     "Extract 1–2 concise, quotable key points suitable for slides/lower-thirds. Prefer short sentences, avoid filler, keep the original voice, and skip vague statements.",
   paraphraseConfidenceThreshold: 0.6,
   aiMinWordCount: 6,
-  autoAddDetectedToHistory: false,
+  autoAddDetectedToHistory: true,
   highlightDirectReferences: true,
   highlightParaphrasedReferences: true,
   directReferenceColor: '#ec4899', // Pink

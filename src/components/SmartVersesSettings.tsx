@@ -170,7 +170,11 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
   // Load settings on mount
   useEffect(() => {
     const savedSettings = loadSmartVersesSettings();
-    setSettings(savedSettings);
+    const normalizedSettings: SmartVersesSettingsType =
+      savedSettings.paraphraseDetectionMode === "hybrid"
+        ? { ...savedSettings, paraphraseDetectionMode: "offline" }
+        : savedSettings;
+    setSettings(normalizedSettings);
     loadMicrophones();
     if ((savedSettings.audioCaptureMode || "native") === "native") {
       loadNativeDevices();
@@ -437,7 +441,10 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
       available.push({ value: "groq", label: "Groq (Recommended - Super Fast)" });
     }
 
-    available.push({ value: "offline", label: "Offline (Local Paraphrase)" });
+    available.push({
+      value: "offline",
+      label: "Offline Search (Experimental - low accuracy)",
+    });
 
     return available;
   }, []);
@@ -559,11 +566,10 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
 
   // Load models when provider changes
   useEffect(() => {
-    if (!isSmartVersesMode) return;
     if (settings.bibleSearchProvider) {
       loadBibleSearchModels(settings.bibleSearchProvider);
     }
-  }, [isSmartVersesMode, settings.bibleSearchProvider, loadBibleSearchModels]);
+  }, [settings.bibleSearchProvider, loadBibleSearchModels]);
 
   const formatBibleSearchModelLabel = useCallback(
     (modelId: string) => {
@@ -578,6 +584,50 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
     },
     [settings.bibleSearchProvider]
   );
+
+  const formatProviderLabel = useCallback((provider?: string | null) => {
+    switch (provider) {
+      case "openai":
+        return "OpenAI";
+      case "gemini":
+        return "Gemini";
+      case "groq":
+        return "Groq";
+      default:
+        return "Default AI";
+    }
+  }, []);
+
+  const formatModelLabelForProvider = useCallback(
+    (provider?: string | null, modelId?: string | null) => {
+      if (!modelId) return "default model";
+      if (provider === "groq") {
+        return formatGroqModelLabel(modelId);
+      }
+      return modelId;
+    },
+    []
+  );
+
+  const getParaphraseAIOptionLabel = useCallback(() => {
+    const appSettings = getAppSettings();
+    const provider =
+      settings.bibleSearchProvider && settings.bibleSearchProvider !== "offline"
+        ? settings.bibleSearchProvider
+        : appSettings.defaultAIProvider;
+    const model =
+      settings.bibleSearchProvider && settings.bibleSearchProvider !== "offline"
+        ? settings.bibleSearchModel
+        : appSettings.defaultAIModel;
+    const providerLabel = formatProviderLabel(provider);
+    const modelLabel = formatModelLabelForProvider(provider, model || "");
+    return `AI Search (${providerLabel} - ${modelLabel})`;
+  }, [
+    settings.bibleSearchProvider,
+    settings.bibleSearchModel,
+    formatProviderLabel,
+    formatModelLabelForProvider,
+  ]);
 
   // Load available microphones
   const loadMicrophones = async () => {
@@ -1244,100 +1294,6 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
         </div>
       </div>
 
-      {/* AI Settings */}
-      <div style={sectionStyle}>
-        <div style={sectionHeaderStyle}>
-          <FaRobot />
-          <h3 style={{ margin: 0 }}>AI Settings</h3>
-        </div>
-
-        <div
-          style={{
-            padding: "var(--spacing-3)",
-            backgroundColor: "var(--app-bg-color)",
-            borderRadius: "8px",
-            marginBottom: "var(--spacing-4)",
-          }}
-        >
-          <h4 style={{ margin: "0 0 var(--spacing-3) 0", fontSize: "0.95rem" }}>
-            Bible Search AI
-          </h4>
-          <p style={{ ...helpTextStyle, marginBottom: "var(--spacing-3)" }}>
-            When enabled, AI will search for Bible verses when direct reference
-            parsing fails. You can also select Offline to use local paraphrase
-            matching instead. API keys are configured in Settings → AI Configuration.
-          </p>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "var(--spacing-3)",
-            }}
-          >
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Provider</label>
-              <select
-                value={settings.bibleSearchProvider || ""}
-                onChange={(e) => {
-                  handleChange(
-                    "bibleSearchProvider",
-                    e.target.value || undefined
-                  );
-                  handleChange("bibleSearchModel", ""); // Reset model when provider changes
-                }}
-                style={inputStyle}
-              >
-                <option value="">Select Provider</option>
-                {getAvailableProviders().map((provider) => (
-                  <option key={provider.value} value={provider.value}>
-                    {provider.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Model</label>
-              <div style={{ position: "relative" }}>
-                <select
-                  value={settings.bibleSearchModel || ""}
-                  onChange={(e) =>
-                    handleChange("bibleSearchModel", e.target.value)
-                  }
-                  disabled={
-                    !settings.bibleSearchProvider || bibleSearchModelsLoading
-                  }
-                  style={inputStyle}
-                >
-                  <option value="">
-                    {settings.bibleSearchProvider === "offline"
-                      ? "Not required for offline"
-                      : bibleSearchModelsLoading
-                      ? "Loading models..."
-                      : "Select Model"}
-                  </option>
-                  {bibleSearchModels.map((model) => (
-                    <option key={model} value={model}>
-                      {formatBibleSearchModelLabel(model)}
-                    </option>
-                  ))}
-                </select>
-                {bibleSearchModelsLoading && (
-                  <FaSpinner
-                    style={{
-                      position: "absolute",
-                      right: "40px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      animation: "spin 1s linear infinite",
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-        </div>
-      </div>
       {!isRemoteTranscription && (
           <>
             {/* Engine Configuration Container */}
@@ -2119,7 +2075,6 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
             </div>
           </>
         )}
-      </div>
       </>
       )}
 
@@ -2144,8 +2099,9 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
             </h4>
             <p style={{ ...helpTextStyle, marginBottom: "var(--spacing-3)" }}>
               When enabled, AI will search for Bible verses when direct reference
-              parsing fails. Configure the provider and model below. API keys are
-              configured in Settings → AI Configuration.
+              parsing fails. You can also select Offline Search (Experimental) to
+              use local paraphrase matching instead. API keys are configured in
+              Settings → AI Configuration.
             </p>
 
             <div
@@ -2191,7 +2147,9 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                     style={inputStyle}
                   >
                     <option value="">
-                      {bibleSearchModelsLoading
+                      {settings.bibleSearchProvider === "offline"
+                        ? "Not required for offline"
+                        : bibleSearchModelsLoading
                         ? "Loading models..."
                         : "Select Model"}
                     </option>
@@ -2229,7 +2187,9 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
             )}
             {settings.bibleSearchProvider === "offline" && (
               <div style={{ ...fieldStyle, marginTop: "var(--spacing-4)" }}>
-                <label style={labelStyle}>Offline Search Confidence Threshold</label>
+                <label style={labelStyle}>
+                  Offline Search (Experimental) Confidence Threshold
+                </label>
                 <div
                   style={{
                     display: "flex",
@@ -2256,151 +2216,154 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                   </span>
                 </div>
                 <p style={helpTextStyle}>
-                  Controls the minimum confidence for offline Bible search results.
-                  This does not affect AI search or live transcription.
+                  Controls the minimum confidence for Offline Search (Experimental)
+                  results. This does not affect AI Search or live transcription.
                 </p>
               </div>
             )}
           </div>
-        </div>
-      )}
 
-      {isTranscriptionMode && !isRemoteTranscription && (
-        <div style={sectionStyle}>
-          <div style={sectionHeaderStyle}>
-            <FaRobot />
-            <h3 style={{ margin: 0 }}>Transcription AI</h3>
-          </div>
+          <div
+            style={{
+              padding: "var(--spacing-3)",
+              backgroundColor: "var(--app-bg-color)",
+              borderRadius: "8px",
+              marginBottom: "var(--spacing-4)",
+            }}
+          >
+            <h4 style={{ margin: "0 0 var(--spacing-3) 0", fontSize: "0.95rem" }}>
+              Transcription AI
+            </h4>
 
-          <div style={fieldStyle}>
-            <label style={checkboxLabelStyle}>
-              <input
-                type="checkbox"
-                checked={settings.enableParaphraseDetection}
-                onChange={(e) =>
-                  handleChange("enableParaphraseDetection", e.target.checked)
-                }
-              />
-              Enable Paraphrase Detection
-            </label>
-            <p style={helpTextStyle}>
-              Detect when speakers paraphrase Bible verses without quoting them
-              directly.
-            </p>
-          </div>
-
-          {settings.enableParaphraseDetection && (
             <div style={fieldStyle}>
-              <label style={labelStyle}>Paraphrase Detection Mode</label>
-              <select
-                value={settings.paraphraseDetectionMode || "hybrid"}
-                onChange={(e) =>
-                  handleChange("paraphraseDetectionMode", e.target.value)
-                }
-                style={inputStyle}
-              >
-                <option value="hybrid">Hybrid (offline first, AI fallback)</option>
-                <option value="offline">Offline only</option>
-                <option value="ai">AI only</option>
-              </select>
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={settings.enableParaphraseDetection}
+                  onChange={(e) =>
+                    handleChange("enableParaphraseDetection", e.target.checked)
+                  }
+                />
+                Enable Paraphrase Detection
+              </label>
               <p style={helpTextStyle}>
-                Hybrid mode uses offline matching first and only calls AI if no
-                matches are found. Key point extraction still requires AI. For
-                best offline accuracy, download the embedding model in Manage
-                Models.
+                Detect when speakers paraphrase Bible verses without quoting them
+                directly.
               </p>
             </div>
-          )}
 
-          <div style={fieldStyle}>
-            <label style={checkboxLabelStyle}>
-              <input
-                type="checkbox"
-                checked={settings.enableKeyPointExtraction}
-                onChange={(e) =>
-                  handleChange("enableKeyPointExtraction", e.target.checked)
-                }
-              />
-              Enable Key Point Extraction
-            </label>
-            <p style={helpTextStyle}>
-              Extract quotable key points from sermons (requires AI).
-            </p>
-          </div>
+            {settings.enableParaphraseDetection && (
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Paraphrase Detection Mode</label>
+                <select
+                  value={settings.paraphraseDetectionMode || "offline"}
+                  onChange={(e) =>
+                    handleChange("paraphraseDetectionMode", e.target.value)
+                  }
+                  style={inputStyle}
+                >
+                  <option value="offline">Offline Search (Experimental)</option>
+                  <option value="ai">{getParaphraseAIOptionLabel()}</option>
+                </select>
+                <p style={helpTextStyle}>
+                  Offline Search (Experimental) uses local matching. AI Search uses the provider and
+                  model selected above. Key point extraction still requires AI. For
+                  best offline accuracy, download the embedding model in Manage
+                  Models.
+                </p>
+              </div>
+            )}
 
-          {settings.enableKeyPointExtraction && (
             <div style={fieldStyle}>
-              <label style={labelStyle}>Key Point Extraction Instructions</label>
-              <textarea
-                value={settings.keyPointExtractionInstructions || ""}
-                onChange={(e) =>
-                  handleChange("keyPointExtractionInstructions", e.target.value)
-                }
-                placeholder="Optional: Customize how key points should be extracted for your church/pastor..."
+              <label style={labelStyle}>Paraphrase Confidence Threshold</label>
+              <div
                 style={{
-                  ...inputStyle,
-                  minHeight: "110px",
-                  fontFamily: "inherit",
-                  resize: "vertical",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "var(--spacing-3)",
                 }}
-              />
+              >
+                <input
+                  type="range"
+                  min="0.3"
+                  max="0.9"
+                  step="0.1"
+                  value={settings.paraphraseConfidenceThreshold}
+                  onChange={(e) =>
+                    handleChange(
+                      "paraphraseConfidenceThreshold",
+                      parseFloat(e.target.value)
+                    )
+                  }
+                  style={{ flex: 1 }}
+                />
+                <span style={{ minWidth: "50px", textAlign: "right" }}>
+                  {Math.round(settings.paraphraseConfidenceThreshold * 100)}%
+                </span>
+              </div>
               <p style={helpTextStyle}>
-                These instructions are added to the AI prompt when key point
-                extraction is enabled. Leave blank to use the default behavior.
+                Only show paraphrased verses with confidence above this threshold.
               </p>
             </div>
-          )}
 
-          <div style={fieldStyle}>
-            <label style={labelStyle}>Paraphrase Confidence Threshold</label>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--spacing-3)",
-              }}
-            >
+            <div style={fieldStyle}>
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={settings.enableKeyPointExtraction}
+                  onChange={(e) =>
+                    handleChange("enableKeyPointExtraction", e.target.checked)
+                  }
+                />
+                Enable Key Point Extraction
+              </label>
+              <p style={helpTextStyle}>
+                Extract quotable key points from sermons (requires AI).
+              </p>
+            </div>
+
+            {settings.enableKeyPointExtraction && (
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Key Point Extraction Instructions</label>
+                <textarea
+                  value={settings.keyPointExtractionInstructions || ""}
+                  onChange={(e) =>
+                    handleChange("keyPointExtractionInstructions", e.target.value)
+                  }
+                  placeholder="Optional: Customize how key points should be extracted for your church/pastor..."
+                  style={{
+                    ...inputStyle,
+                    minHeight: "110px",
+                    fontFamily: "inherit",
+                    resize: "vertical",
+                  }}
+                />
+                <p style={helpTextStyle}>
+                  These instructions are added to the AI prompt when key point
+                  extraction is enabled. Leave blank to use the default behavior.
+                </p>
+              </div>
+            )}
+
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Minimum Words for AI Analysis</label>
               <input
-                type="range"
-                min="0.3"
-                max="0.9"
-                step="0.1"
-                value={settings.paraphraseConfidenceThreshold}
+                type="number"
+                min={1}
+                max={20}
+                value={settings.aiMinWordCount}
                 onChange={(e) =>
                   handleChange(
-                    "paraphraseConfidenceThreshold",
-                    parseFloat(e.target.value)
+                    "aiMinWordCount",
+                    Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1))
                   )
                 }
-                style={{ flex: 1 }}
+                style={inputStyle}
               />
-              <span style={{ minWidth: "50px", textAlign: "right" }}>
-                {Math.round(settings.paraphraseConfidenceThreshold * 100)}%
-              </span>
+              <p style={helpTextStyle}>
+                Skip AI requests for short phrases like "thank you".
+              </p>
             </div>
-            <p style={helpTextStyle}>
-              Only show paraphrased verses with confidence above this threshold.
-            </p>
-          </div>
-
-          <div style={fieldStyle}>
-            <label style={labelStyle}>Minimum Words for AI Analysis</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={settings.aiMinWordCount}
-              onChange={(e) =>
-                handleChange(
-                  "aiMinWordCount",
-                  Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1))
-                )
-              }
-              style={inputStyle}
-            />
-            <p style={helpTextStyle}>
-              Skip AI requests for short phrases like "thank you".
-            </p>
           </div>
         </div>
       )}
