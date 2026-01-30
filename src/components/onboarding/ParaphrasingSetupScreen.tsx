@@ -32,12 +32,10 @@ const ParaphrasingSetupScreen: React.FC<ParaphrasingSetupScreenProps> = ({
     return provider === "offline" ? "offline" : "cloud";
   });
   const [groqKey, setGroqKey] = useState("");
-  const [groqHasKey, setGroqHasKey] = useState(false);
 
   useEffect(() => {
     const appSettings = getAppSettings();
     setGroqKey(appSettings.groqConfig?.apiKey || "");
-    setGroqHasKey(!!appSettings.groqConfig?.apiKey);
     
     if (!provider && appSettings.groqConfig?.apiKey) {
       onProviderChange("groq");
@@ -75,7 +73,6 @@ const ParaphrasingSetupScreen: React.FC<ParaphrasingSetupScreenProps> = ({
     settings.groqApiKey = value;
     saveSmartVersesSettings(settings);
 
-    setGroqHasKey(!!value);
     if (value && !provider) {
       onProviderChange("groq");
     }
