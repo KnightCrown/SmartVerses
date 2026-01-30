@@ -74,6 +74,7 @@ import { formatGroqModelLabel } from "../utils/groqModelLimits";
 import { useDebouncedEffect } from "../hooks/useDebouncedEffect";
 import { isDevModeEnabled } from "../utils/devFlags";
 import { sectionStyle, sectionHeaderStyle } from "../utils/settingsSectionStyles";
+import BibleConversionModal from "./BibleConversionModal";
 import "../App.css";
 
 // =============================================================================
@@ -111,6 +112,7 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
   const [translationsLoading, setTranslationsLoading] = useState(false);
   const [translationsError, setTranslationsError] = useState<string | null>(null);
   const [loadedTranslationsExpanded, setLoadedTranslationsExpanded] = useState(false);
+  const [showBibleConversionModal, setShowBibleConversionModal] = useState(false);
 
   // Offline model manager state
   const [showModelManager, setShowModelManager] = useState(false);
@@ -2210,13 +2212,27 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
             </p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-2)" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "var(--spacing-2)",
+              flexWrap: "wrap",
+            }}
+          >
             <button
               onClick={handleRefreshTranslations}
               className="secondary btn-sm"
               disabled={translationsLoading}
             >
               {translationsLoading ? "Refreshing..." : "Refresh translations"}
+            </button>
+            <button
+              type="button"
+              className="secondary btn-sm"
+              onClick={() => setShowBibleConversionModal(true)}
+            >
+              Conversion Tool
             </button>
             <span style={helpTextStyle}>
               Reads `.svjson` files from ~/Documents/SmartVerses/Bibles
@@ -3251,6 +3267,11 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
           </div>
         </div>
       )}
+      <BibleConversionModal
+        isOpen={showBibleConversionModal}
+        onClose={() => setShowBibleConversionModal(false)}
+        onSaved={handleRefreshTranslations}
+      />
     </div>
   );
 };
