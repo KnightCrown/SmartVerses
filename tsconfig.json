@@ -27,6 +27,6 @@
       "@tauri-apps/api/core": ["node_modules/@tauri-apps/api/dist-core/*"]
     }
   },
-  "include": ["src", "tests"],
+  "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

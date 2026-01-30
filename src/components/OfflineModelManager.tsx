@@ -624,9 +624,10 @@ const OfflineModelManager: React.FC<OfflineModelManagerProps> = ({
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-2)" }}>
                 {embeddingModels.map((model) => (
                   <ModelCard
-                    key={model.id}
+                    key={model.modelId}
                     model={model}
                     isDownloading={downloadingModels.has(model.modelId)}
+                    isDeleting={deletingModels.has(model.modelId)}
                     progress={downloadProgress[model.modelId]}
                     currentFile={currentFile[model.modelId]}
                     onDownload={() => handleDownload(model)}
