@@ -51,6 +51,7 @@ import {
   searchBibleWithAI,
   resolveParaphrasedVerses,
 } from "../services/smartVersesAIService";
+import { analyzeTranscriptChunkOffline } from "../services/smartVersesOfflineParaphraseService";
 import { searchBibleTextAsReferences } from "../services/bibleTextSearchService";
 import {
   loadDisplaySettings,
@@ -870,12 +871,38 @@ const SmartVersesPage: React.FC = () => {
       references = await detectAndLookupReferences(query);
       console.log("🔍 Direct parsing found:", references.length, "references");
 
-      // STEP 2: If no direct references found, try secondary search
+      // STEP 2: If still no references found, try AI/offline/text search
       if (references.length === 0) {
         if (isAISearchEnabled) {
           // Check if AI is properly configured
-          const provider = settings.bibleSearchProvider || appSettings.defaultAIProvider;
+          const explicitProvider = settings.bibleSearchProvider;
+          const provider = explicitProvider || appSettings.defaultAIProvider;
           const model = settings.bibleSearchModel;
+
+          if (explicitProvider === "offline") {
+            console.log("🧠 Step 2: Offline paraphrase match");
+            const offlineAnalysis = await analyzeTranscriptChunkOffline(query, {
+              minConfidence: settings.bibleSearchConfidenceThreshold ?? 0.6,
+              maxResults: 5,
+              candidateLimit: 120,
+            });
+
+            if (offlineAnalysis.paraphrasedVerses.length > 0) {
+              searchMethod = "offline";
+              references = await resolveParaphrasedVerses(
+                offlineAnalysis.paraphrasedVerses
+              );
+              console.log(
+                "🧠 Offline paraphrase found:",
+                references.length,
+                "references"
+              );
+            } else {
+              console.log("📝 Offline paraphrase empty, falling back to text search");
+              searchMethod = "text";
+              references = await searchBibleTextAsReferences(query, 5);
+            }
+          } else {
           
           // Check for API key based on provider
           let hasApiKey = false;
@@ -883,24 +910,25 @@ const SmartVersesPage: React.FC = () => {
           else if (provider === 'gemini') hasApiKey = !!appSettings.geminiConfig?.apiKey;
           else if (provider === 'groq') hasApiKey = !!appSettings.groqConfig?.apiKey;
           
-          if (provider && hasApiKey) {
-            // Use AI search with configured provider/model
-            console.log("🤖 Step 2: AI search with", provider, model || "(default model)");
-            searchMethod = "ai";
-            references = await searchBibleWithAI(
-              query, 
-              appSettings,
-              provider as 'openai' | 'gemini' | 'groq',
-              model
-            );
-            console.log("🤖 AI search found:", references.length, "references");
-          } else {
-            console.warn("⚠️ AI search enabled but not configured. Provider:", provider, "Has API key:", hasApiKey);
-            // Fall back to text search
-            console.log("📝 Falling back to text search (AI not properly configured)");
-            searchMethod = "text";
-            references = await searchBibleTextAsReferences(query, 5);
-            console.log("📝 Text search found:", references.length, "references");
+            if (provider && hasApiKey) {
+              // Use AI search with configured provider/model
+              console.log("🤖 Step 2: AI search with", provider, model || "(default model)");
+              searchMethod = "ai";
+              references = await searchBibleWithAI(
+                query,
+                appSettings,
+                provider as 'openai' | 'gemini' | 'groq',
+                model
+              );
+              console.log("🤖 AI search found:", references.length, "references");
+            } else {
+              console.warn("⚠️ AI search enabled but not configured. Provider:", provider, "Has API key:", hasApiKey);
+              // Fall back to text search
+              console.log("📝 Falling back to text search (AI not properly configured)");
+              searchMethod = "text";
+              references = await searchBibleTextAsReferences(query, 5);
+              console.log("📝 Text search found:", references.length, "references");
+            }
           }
         } else {
           // Use text search (FlexSearch) as fallback
@@ -925,8 +953,11 @@ const SmartVersesPage: React.FC = () => {
         } else {
           // Build helpful error message
           let errorMsg = "No verses found for your search.";
+          const providerForMessage = settings.bibleSearchProvider;
           if (!isAISearchEnabled) {
             errorMsg += " Try enabling AI Search below for better results.";
+          } else if (searchMethod === "text" && providerForMessage === "offline") {
+            errorMsg += " Offline Search (Experimental) didn't find a match. Try lowering the confidence threshold or switch to an AI provider.";
           } else if (searchMethod === "text") {
             errorMsg += " AI Search is enabled but not configured. Go to Settings → SmartVerses to configure your AI provider.";
           } else {
@@ -1213,6 +1244,199 @@ const SmartVersesPage: React.FC = () => {
       console.error("Error taking off live:", error);
     }
   }, [settings]);
+
+  const applyParaphraseDetections = useCallback(
+    (
+      resolvedRefs: DetectedBibleReference[],
+      transcriptText: string,
+      sourceLabel?: string
+    ): DetectedBibleReference[] => {
+      if (!resolvedRefs || resolvedRefs.length === 0) return [];
+
+      const resolvedWithTranscript = resolvedRefs.map((r) => ({
+        ...r,
+        transcriptText,
+      }));
+
+      const recent = detectedReferencesRef.current.slice(-5);
+      const recentKeys = new Set(
+        recent.map((r) => (r.displayRef || "").trim().toLowerCase())
+      );
+      const deduped = resolvedWithTranscript.filter(
+        (r) => !recentKeys.has((r.displayRef || "").trim().toLowerCase())
+      );
+
+      if (deduped.length > 0) {
+        setDetectedReferences((prev) => [...prev, ...deduped]);
+      }
+
+      if (settings.autoAddDetectedToHistory && deduped.length > 0) {
+        const confidence = Math.round((deduped[0].confidence || 0) * 100);
+        const label = sourceLabel ? `${sourceLabel}, ` : "";
+        setChatHistory((prev) => [
+          ...prev,
+          {
+            id: `paraphrase-${Date.now()}`,
+            type: "result",
+            content: `Paraphrase detected (${label}${confidence}% confidence)`,
+            timestamp: Date.now(),
+            references: deduped,
+          },
+        ]);
+      }
+
+      if (settings.autoTriggerOnDetection && deduped.length > 0) {
+        handleGoLive(deduped[0]);
+      }
+
+      return deduped;
+    },
+    [handleGoLive, settings.autoAddDetectedToHistory, settings.autoTriggerOnDetection]
+  );
+
+  /**
+   * Helper function to run paraphrase detection and key point extraction
+   * Handles both offline and AI-based detection based on settings
+   */
+  const runParaphraseDetection = useCallback(
+    async (
+      text: string,
+      segment: TranscriptionSegment,
+      context: "remote" | "local" = "local"
+    ): Promise<{
+      scriptureReferences: string[];
+      keyPoints: KeyPoint[];
+      paraphrasedVersesForWs: ParaphrasedVerse[];
+    }> => {
+      const appSettings = loadAppSettings();
+      let scriptureReferences: string[] = [];
+      let keyPoints: KeyPoint[] = [];
+      let paraphrasedVersesForWs: ParaphrasedVerse[] = [];
+
+      const paraphraseMode = settings.paraphraseDetectionMode || "offline";
+      const allowOfflineParaphrase =
+        settings.enableParaphraseDetection && paraphraseMode !== "ai";
+      const allowAIParaphrase =
+        settings.enableParaphraseDetection && paraphraseMode !== "offline";
+      let offlineParaphraseCount = 0;
+
+      // Run offline paraphrase detection if enabled
+      if (allowOfflineParaphrase) {
+        try {
+          const offlineAnalysis = await analyzeTranscriptChunkOffline(text, {
+            minConfidence: settings.paraphraseConfidenceThreshold,
+            maxResults: 3,
+            candidateLimit: 160,
+          });
+          if (offlineAnalysis.paraphrasedVerses.length > 0) {
+            const logPrefix = context === "remote" ? "[SmartVerses][Remote]" : "[SmartVerses]";
+            console.log(
+              `${logPrefix}[Paraphrase] Offline matches:`,
+              offlineAnalysis.paraphrasedVerses.length
+            );
+            const resolvedRefs = await resolveParaphrasedVerses(
+              offlineAnalysis.paraphrasedVerses
+            );
+            const deduped = applyParaphraseDetections(
+              resolvedRefs,
+              text,
+              "Offline"
+            );
+            offlineParaphraseCount = deduped.length;
+            if (deduped.length > 0) {
+              scriptureReferences = Array.from(
+                new Set(
+                  deduped.map((r) => (r.displayRef || "").trim()).filter(Boolean)
+                )
+              );
+            }
+          }
+        } catch (offlineError) {
+          const logPrefix = context === "remote" ? "[SmartVerses][Remote]" : "[SmartVerses]";
+          console.error(`${logPrefix} Offline paraphrase failed:`, offlineError);
+        }
+      }
+
+      // Run AI analysis if needed (for key points or AI paraphrase detection)
+      const shouldRunAI =
+        settings.enableKeyPointExtraction ||
+        (allowAIParaphrase && offlineParaphraseCount === 0);
+
+      if (shouldRunAI) {
+        const logPrefix = context === "remote" ? "[SmartVerses][Remote]" : "[SmartVerses][AI]";
+        console.log(`${logPrefix} Invoking AI analysis...`);
+        try {
+          const analysis = await analyzeTranscriptChunk(
+            text,
+            appSettings,
+            allowAIParaphrase && offlineParaphraseCount === 0,
+            settings.enableKeyPointExtraction,
+            {
+              keyPointInstructions: settings.keyPointExtractionInstructions,
+              overrideProvider:
+                settings.bibleSearchProvider === "offline"
+                  ? undefined
+                  : settings.bibleSearchProvider,
+              overrideModel: settings.bibleSearchModel,
+              minParaphraseConfidence: settings.paraphraseConfidenceThreshold,
+              maxParaphraseResults: 3,
+              minWords: settings.aiMinWordCount,
+            }
+          );
+
+          // Process key points
+          if (analysis.keyPoints?.length) {
+            keyPoints = analysis.keyPoints;
+            setTranscriptKeyPoints((prev) => ({
+              ...prev,
+              [segment.id]: keyPoints,
+            }));
+          }
+
+          // Store paraphrased verses for WebSocket (local handler only)
+          if (analysis.paraphrasedVerses.length > 0) {
+            paraphrasedVersesForWs = analysis.paraphrasedVerses;
+          }
+
+          // Process AI paraphrase detection results
+          if (allowAIParaphrase && analysis.paraphrasedVerses.length > 0) {
+            const logPrefix = context === "remote" ? "[SmartVerses][Remote]" : "[SmartVerses]";
+            console.log(
+              `${logPrefix}[Paraphrase] AI analysis returned:`,
+              analysis.paraphrasedVerses.length,
+              "paraphrased verse(s)"
+            );
+
+            const resolvedRefs = await resolveParaphrasedVerses(
+              analysis.paraphrasedVerses
+            );
+            const deduped = applyParaphraseDetections(resolvedRefs, text);
+            if (deduped.length > 0) {
+              scriptureReferences = Array.from(
+                new Set([
+                  ...scriptureReferences,
+                  ...deduped.map((r) => (r.displayRef || "").trim()).filter(Boolean),
+                ])
+              );
+            }
+          }
+        } catch (aiError) {
+          const logPrefix = context === "remote" ? "[SmartVerses][Remote]" : "[SmartVerses]";
+          console.error(`${logPrefix} AI analysis failed:`, aiError);
+        }
+      }
+
+      return {
+        scriptureReferences,
+        keyPoints,
+        paraphrasedVersesForWs,
+      };
+    },
+    [
+      settings,
+      applyParaphraseDetections,
+    ]
+  );
 
   useEffect(() => {
     const handleApiGoLive: EventListener = (event) => {
@@ -1524,8 +1748,8 @@ const SmartVersesPage: React.FC = () => {
           }
 
           (async () => {
-            const scriptureReferences = m.scripture_references || [];
-            const keyPoints: KeyPoint[] = (m.key_points as KeyPoint[]) || [];
+            let scriptureReferences = m.scripture_references || [];
+            let keyPoints: KeyPoint[] = (m.key_points as KeyPoint[]) || [];
             const paraphrasedVerses = m.paraphrased_verses || [];
 
             if (keyPoints.length > 0) {
@@ -1565,45 +1789,35 @@ const SmartVersesPage: React.FC = () => {
             if (paraphrasedVerses.length > 0) {
               const resolvedRefs = await resolveParaphrasedVerses(paraphrasedVerses);
               if (resolvedRefs.length > 0) {
-                const resolvedWithTranscript = resolvedRefs.map((r) => ({
-                  ...r,
-                  transcriptText: m.text,
-                }));
-
-                // De-dupe against the most recent refs to avoid repeated paraphrase entries.
-                const recent = detectedReferencesRef.current.slice(-5);
-                const recentKeys = new Set(
-                  recent.map((r) => (r.displayRef || "").trim().toLowerCase())
+                const deduped = applyParaphraseDetections(
+                  resolvedRefs,
+                  m.text,
+                  "Remote"
                 );
-                const deduped = resolvedWithTranscript.filter(
-                  (r) => !recentKeys.has((r.displayRef || "").trim().toLowerCase())
-                );
-
                 if (deduped.length > 0) {
-                  setDetectedReferences((prev) => [...prev, ...deduped]);
-                }
-
-                if (settings.autoAddDetectedToHistory) {
-                  if (deduped.length > 0) {
-                    setChatHistory((prev) => [
-                      ...prev,
-                      {
-                        id: `paraphrase-${Date.now()}`,
-                        type: "result",
-                        content: `Paraphrase detected (${Math.round((deduped[0].confidence || 0) * 100)}% confidence)`,
-                        timestamp: Date.now(),
-                        references: deduped,
-                      },
-                    ]);
-                  }
-                }
-
-                if (autoTriggerOnDetectionRef.current) {
-                  if (deduped.length > 0) {
-                    handleGoLive(deduped[0]);
-                  }
+                  scriptureReferences = Array.from(
+                    new Set([
+                      ...scriptureReferences,
+                      ...deduped.map((r) => (r.displayRef || "").trim()).filter(Boolean),
+                    ])
+                  );
                 }
               }
+            }
+
+            if (
+              scriptureReferences.length === 0 &&
+              paraphrasedVerses.length === 0 &&
+              (settings.enableParaphraseDetection || settings.enableKeyPointExtraction)
+            ) {
+              const result = await runParaphraseDetection(m.text, segment, "remote");
+              scriptureReferences = Array.from(
+                new Set([
+                  ...scriptureReferences,
+                  ...result.scriptureReferences,
+                ])
+              );
+              keyPoints = result.keyPoints;
             }
 
             // Re-broadcast to local Live Slides server if enabled and safe.
@@ -1641,6 +1855,8 @@ const SmartVersesPage: React.FC = () => {
       );
     }
   }, [
+    runParaphraseDetection,
+    applyParaphraseDetections,
     disconnectRemoteTranscriptionWs,
     emitTranscriptionStream,
     settings.remoteTranscriptionHost,
@@ -1832,88 +2048,10 @@ const SmartVersesPage: React.FC = () => {
                 handleGoLive(directRefs[0]);
               }
             } else if (settings.enableParaphraseDetection || settings.enableKeyPointExtraction) {
-              // Try AI analysis (paraphrase detection and/or key point extraction)
-              console.log("[SmartVerses][AI] No direct refs found; invoking AI analysis...");
-              const analysis = await analyzeTranscriptChunk(
-                text,
-                appSettings,
-                settings.enableParaphraseDetection,
-                settings.enableKeyPointExtraction,
-                {
-                  keyPointInstructions: settings.keyPointExtractionInstructions,
-                  overrideProvider: settings.bibleSearchProvider,
-                  overrideModel: settings.bibleSearchModel,
-                  minWords: settings.aiMinWordCount,
-                }
-              );
-              keyPoints = analysis.keyPoints || [];
-              if (keyPoints.length > 0) {
-                setTranscriptKeyPoints((prev) => ({
-                  ...prev,
-                  [segment.id]: keyPoints,
-                }));
-              }
-
-              console.log(
-                "[SmartVerses][Paraphrase] AI analysis returned:",
-                analysis.paraphrasedVerses.length,
-                "paraphrased verse(s)"
-              );
-
-              if (analysis.paraphrasedVerses.length > 0) {
-                paraphrasedVersesForWs = analysis.paraphrasedVerses;
-              }
-
-              if (settings.enableParaphraseDetection && analysis.paraphrasedVerses.length > 0) {
-                const resolvedRefs = await resolveParaphrasedVerses(analysis.paraphrasedVerses);
-                if (resolvedRefs.length > 0) {
-                  console.log("[SmartVerses][Paraphrase] Resolved refs:", resolvedRefs.map(r => r.displayRef));
-                  // Attach paraphrase-detected refs to the same transcript segment so the UI can
-                  // display them inline under that segment (same behavior as direct refs).
-                  const resolvedWithTranscript = resolvedRefs.map((r) => ({
-                    ...r,
-                    transcriptText: text,
-                  }));
-
-                  // De-dupe: if the last few detected references already include this same verse,
-                  // don't show it again as a paraphrase (common when someone says the ref, then reads it).
-                  const recent = detectedReferencesRef.current.slice(-5);
-                  const recentKeys = new Set(
-                    recent.map((r) => (r.displayRef || "").trim().toLowerCase())
-                  );
-                  const deduped = resolvedWithTranscript.filter(
-                    (r) => !recentKeys.has((r.displayRef || "").trim().toLowerCase())
-                  );
-
-                  if (deduped.length !== resolvedWithTranscript.length) {
-                    console.log(
-                      "[SmartVerses][Paraphrase] De-duped paraphrase refs:",
-                      resolvedWithTranscript.length - deduped.length,
-                      "filtered out"
-                    );
-                  }
-
-                  if (deduped.length > 0) {
-                    setDetectedReferences(prev => [...prev, ...deduped]);
-                  }
-                  
-                  if (settings.autoAddDetectedToHistory) {
-                    if (deduped.length > 0) {
-                      setChatHistory(prev => [...prev, {
-                        id: `paraphrase-${Date.now()}`,
-                        type: "result",
-                        content: `Paraphrase detected (${Math.round((deduped[0].confidence || 0) * 100)}% confidence)`,
-                        timestamp: Date.now(),
-                        references: deduped,
-                      }]);
-                    }
-                  }
-
-                  if (autoTriggerOnDetectionRef.current && deduped.length > 0) {
-                    handleGoLive(deduped[0]);
-                  }
-                }
-              }
+              const result = await runParaphraseDetection(text, segment, "local");
+              scriptureReferences = result.scriptureReferences;
+              keyPoints = result.keyPoints;
+              paraphrasedVersesForWs = result.paraphrasedVersesForWs;
             }
 
             const wsKeyPoints =
@@ -2015,6 +2153,8 @@ const SmartVersesPage: React.FC = () => {
     appSettings,
     connectToRemoteTranscriptionWs,
     handleGoLive,
+    runParaphraseDetection,
+    applyParaphraseDetections,
     emitTranscriptionStream,
     queueInterimUiUpdate,
     scheduleInterimDirectParse,
@@ -2033,7 +2173,7 @@ const SmartVersesPage: React.FC = () => {
       }
       // Also disconnect browser transcription WebSocket if connected
       disconnectBrowserTranscriptionWs();
-    disconnectRemoteTranscriptionWs();
+      disconnectRemoteTranscriptionWs();
       latestInterimTextRef.current = "";
       pendingInterimUiTextRef.current = "";
       lastInterimDirectSignatureRef.current = "";
@@ -3111,13 +3251,23 @@ const SmartVersesPage: React.FC = () => {
               }
               
               // Check if AI is configured
-              const provider = settings.bibleSearchProvider || appSettings.defaultAIProvider;
+              const explicitProvider = settings.bibleSearchProvider;
+              const provider = explicitProvider || appSettings.defaultAIProvider;
               let hasApiKey = false;
               if (provider === 'openai') hasApiKey = !!appSettings.openAIConfig?.apiKey;
               else if (provider === 'gemini') hasApiKey = !!appSettings.geminiConfig?.apiKey;
               else if (provider === 'groq') hasApiKey = !!appSettings.groqConfig?.apiKey;
               
-              if (provider && hasApiKey) {
+              if (explicitProvider === "offline") {
+                return (
+                  <span style={{
+                    fontSize: "0.75rem",
+                    color: "var(--success)",
+                  }}>
+                    ✓ Local on-device search
+                  </span>
+                );
+              } else if (provider && hasApiKey) {
                 return (
                   <span style={{
                     fontSize: "0.75rem",
