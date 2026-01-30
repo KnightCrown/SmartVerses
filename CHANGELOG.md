@@ -2,6 +2,14 @@
 
 All notable changes to SmartVerses will be documented in this file.
 
+## [0.7.5] - 2026-01-30
+
+### Added
+- **Multiple Bible Translations**: Introduction of support for multiple translations of the Bible
+
+### Changed
+- Version bump to 0.7.5
+
 ## [0.7.4] - 2026-01-30
 
 ### Fixed
