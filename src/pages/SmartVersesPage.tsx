@@ -59,10 +59,13 @@ import {
   sendScriptureToDisplay,
 } from "../services/displayService";
 import { triggerPresentationOnConnections } from "../services/propresenterService";
-import { broadcastTranscriptionStreamMessage } from "../services/transcriptionBroadcastService";
+import {
+  broadcastTranscriptionStatusMessage,
+  broadcastTranscriptionStreamMessage,
+} from "../services/transcriptionBroadcastService";
 import { LiveSlidesWebSocket, getLiveSlidesServerInfo } from "../services/liveSlideService";
 import { getAssemblyAITemporaryToken } from "../services/assemblyaiTokenService";
-import { WsTranscriptionStream } from "../types/liveSlides";
+import { WsTranscriptionStatus, WsTranscriptionStream } from "../types/liveSlides";
 import { mapAudioLevel } from "../utils/audioMeter";
 import { saveTranscriptFile } from "../utils/transcriptDownload";
 import TranscriptOptionsMenu from "../components/transcription/TranscriptOptionsMenu";
@@ -384,6 +387,42 @@ const SmartVersesPage: React.FC = () => {
       );
     };
   }, [emitTranscriptionStatus, transcriptionStatus, isStopping]);
+
+  useEffect(() => {
+    if (settings.remoteTranscriptionEnabled || !settings.streamTranscriptionsToWebSocket) {
+      return;
+    }
+
+    if (transcriptionStatus === "recording") {
+      broadcastTranscriptionStatusMessage({
+        type: "transcription_status",
+        status: "recording",
+        timestamp: Date.now(),
+      }).catch(() => {
+        // If Live Slides server isn't running, silently ignore.
+      });
+      return;
+    }
+
+    if (transcriptionStatus === "idle" || transcriptionStatus === "error") {
+      broadcastTranscriptionStatusMessage({
+        type: "transcription_status",
+        status: "stopped",
+        timestamp: Date.now(),
+        reason:
+          transcriptionStatus === "error"
+            ? transcriptionErrorMessage || "Transcription stopped on server."
+            : "Transcription stopped on server.",
+      }).catch(() => {
+        // If Live Slides server isn't running, silently ignore.
+      });
+    }
+  }, [
+    transcriptionStatus,
+    transcriptionErrorMessage,
+    settings.remoteTranscriptionEnabled,
+    settings.streamTranscriptionsToWebSocket,
+  ]);
 
   // =============================================================================
   // INITIALIZATION
@@ -1541,6 +1580,29 @@ const SmartVersesPage: React.FC = () => {
 
       // Listen for transcription messages from the browser
       ws.onMessage((message) => {
+        if (message.type === "transcription_status") {
+          const statusMessage = message as WsTranscriptionStatus;
+          if (statusMessage.status === "recording") {
+            setTranscriptionErrorMessage(null);
+            setTranscriptionStatus((prev) => (prev === "recording" ? prev : "recording"));
+            return;
+          }
+
+          if (statusMessage.status === "stopped") {
+            const wasActive =
+              transcriptionStatusRef.current === "recording" ||
+              transcriptionStatusRef.current === "connecting";
+            setTranscriptionStatus("idle");
+            setInterimTranscript("");
+            if (wasActive) {
+              setTranscriptionErrorMessage(
+                statusMessage.reason || "Remote transcription stopped on the server."
+              );
+            }
+            return;
+          }
+        }
+
         if (message.type !== "transcription_stream") return;
 
         const m = message as WsTranscriptionStream;
@@ -1701,6 +1763,29 @@ const SmartVersesPage: React.FC = () => {
       console.log("[SmartVerses] Connected to remote transcription source:", wsUrl);
 
       ws.onMessage((message) => {
+        if (message.type === "transcription_status") {
+          const statusMessage = message as WsTranscriptionStatus;
+          if (statusMessage.status === "recording") {
+            setTranscriptionErrorMessage(null);
+            setTranscriptionStatus((prev) => (prev === "recording" ? prev : "recording"));
+            return;
+          }
+
+          if (statusMessage.status === "stopped") {
+            const wasActive =
+              transcriptionStatusRef.current === "recording" ||
+              transcriptionStatusRef.current === "connecting";
+            setTranscriptionStatus("idle");
+            setInterimTranscript("");
+            if (wasActive) {
+              setTranscriptionErrorMessage(
+                statusMessage.reason || "Remote transcription stopped on the server."
+              );
+            }
+            return;
+          }
+        }
+
         if (message.type !== "transcription_stream") return;
 
         const m = message as WsTranscriptionStream;
@@ -2192,6 +2277,7 @@ const SmartVersesPage: React.FC = () => {
     }
   }, [disconnectBrowserTranscriptionWs, disconnectRemoteTranscriptionWs]);
 
+  const isRemoteTranscription = settings.remoteTranscriptionEnabled;
   const transcriptionTimeLimitMinutes = Math.max(
     1,
     settings.transcriptionTimeLimitMinutes ?? 120
@@ -2247,7 +2333,7 @@ const SmartVersesPage: React.FC = () => {
   }, [clearTranscriptionPromptTimeout]);
 
   const openTranscriptionLimitPrompt = useCallback(() => {
-    if (showTranscriptionLimitPrompt) return;
+    if (isRemoteTranscription || showTranscriptionLimitPrompt) return;
     setShowTranscriptionLimitPrompt(true);
     clearTranscriptionPromptTimeout();
     transcriptionPromptTimeoutRef.current = window.setTimeout(() => {
@@ -2256,7 +2342,12 @@ const SmartVersesPage: React.FC = () => {
       }
       setShowTranscriptionLimitPrompt(false);
     }, 60 * 1000);
-  }, [clearTranscriptionPromptTimeout, handleStopTranscription, showTranscriptionLimitPrompt]);
+  }, [
+    clearTranscriptionPromptTimeout,
+    handleStopTranscription,
+    isRemoteTranscription,
+    showTranscriptionLimitPrompt,
+  ]);
 
   const handleTranscriptionSnooze = useCallback(
     (minutes: number) => {
@@ -2287,8 +2378,10 @@ const SmartVersesPage: React.FC = () => {
     if (!transcriptionStartRef.current) {
       const now = Date.now();
       transcriptionStartRef.current = now;
-      transcriptionNextPromptAtRef.current = now + transcriptionTimeLimitMs;
-      transcriptionPromptReasonRef.current = "limit";
+      transcriptionNextPromptAtRef.current = isRemoteTranscription
+        ? null
+        : now + transcriptionTimeLimitMs;
+      transcriptionPromptReasonRef.current = isRemoteTranscription ? null : "limit";
       setTranscriptionElapsedMs(0);
     }
 
@@ -2297,6 +2390,7 @@ const SmartVersesPage: React.FC = () => {
       const now = Date.now();
       setTranscriptionElapsedMs(now - transcriptionStartRef.current);
 
+      if (isRemoteTranscription) return;
       const nextPromptAt = transcriptionNextPromptAtRef.current;
       if (nextPromptAt && now >= nextPromptAt && !showTranscriptionLimitPrompt) {
         openTranscriptionLimitPrompt();
@@ -2310,9 +2404,11 @@ const SmartVersesPage: React.FC = () => {
     showTranscriptionLimitPrompt,
     openTranscriptionLimitPrompt,
     resetTranscriptionTimer,
+    isRemoteTranscription,
   ]);
 
   useEffect(() => {
+    if (isRemoteTranscription) return;
     if (transcriptionStatus !== "recording") return;
     if (!transcriptionStartRef.current) return;
     if (transcriptionPromptReasonRef.current !== "limit") return;
@@ -2331,6 +2427,7 @@ const SmartVersesPage: React.FC = () => {
     transcriptionStatus,
     transcriptionTimeLimitMs,
     openTranscriptionLimitPrompt,
+    isRemoteTranscription,
   ]);
 
   useEffect(() => {
