@@ -1539,6 +1539,29 @@ const SmartVersesPage: React.FC = () => {
       console.log("[SmartVerses] Connected to remote transcription source:", wsUrl);
 
       ws.onMessage((message) => {
+        if (message.type === "transcription_status") {
+          const statusMessage = message as WsTranscriptionStatus;
+          if (statusMessage.status === "recording") {
+            setTranscriptionErrorMessage(null);
+            setTranscriptionStatus((prev) => (prev === "recording" ? prev : "recording"));
+            return;
+          }
+
+          if (statusMessage.status === "stopped") {
+            const wasActive =
+              transcriptionStatusRef.current === "recording" ||
+              transcriptionStatusRef.current === "connecting";
+            setTranscriptionStatus("idle");
+            setInterimTranscript("");
+            if (wasActive) {
+              setTranscriptionErrorMessage(
+                statusMessage.reason || "Remote transcription stopped on the server."
+              );
+            }
+            return;
+          }
+        }
+
         if (message.type !== "transcription_stream") return;
 
         const m = message as WsTranscriptionStream;
