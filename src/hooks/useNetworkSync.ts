@@ -60,6 +60,9 @@ export function useNetworkSync(options: UseNetworkSyncOptions = {}): UseNetworkS
   const [localIp, setLocalIp] = useState<string>("...");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const callbacksIdRef = useRef(
+    `network-sync-${Math.random().toString(36).slice(2, 10)}`
+  );
   
   // Store options in ref to avoid stale closures
   const optionsRef = useRef(options);
@@ -94,7 +97,7 @@ export function useNetworkSync(options: UseNetworkSyncOptions = {}): UseNetworkS
 
   // Set up callbacks for the sync manager
   useEffect(() => {
-    networkSyncManager.setCallbacks({
+    return networkSyncManager.registerCallbacks(callbacksIdRef.current, {
       onPlaylistItemSync: (playlistId, item, action) => {
         optionsRef.current.onPlaylistItemSync?.(playlistId, item, action);
       },

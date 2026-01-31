@@ -3,7 +3,11 @@ import { ScheduleItem, TimerState, TimeAdjustmentMode, ScheduleItemAutomation } 
 import { startTimerOnAllEnabled, stopTimerOnAllEnabled } from "../services/propresenterService";
 import { saveDisplayTimerState } from "../services/displayService";
 import { loadNetworkSyncSettings, networkSyncManager } from "../services/networkSyncService";
-import { mergeScheduleWithLocalAutomations, stripScheduleAutomations } from "../utils/scheduleSync";
+import {
+  applySmartAutomationsToSchedule,
+  mergeScheduleWithLocalAutomations,
+  stripScheduleAutomations,
+} from "../utils/scheduleSync";
 
 // Storage keys
 const SCHEDULE_STORAGE_KEY = "proassist-stage-assist-schedule";
@@ -237,6 +241,7 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
   useEffect(() => {
     scheduleRef.current = schedule;
   }, [schedule]);
+  const syncCallbacksIdRef = useRef("stage-assist-sync");
 
   const [countdownHours, setCountdownHours] = useState("0");
   const [countdownMinutes, setCountdownMinutes] = useState("5");
@@ -467,7 +472,7 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return;
     }
 
-    networkSyncManager.setCallbacks({
+    return networkSyncManager.registerCallbacks(syncCallbacksIdRef.current, {
       onScheduleSync: (syncedSchedule, syncedCurrentSessionIndex) => {
         console.log("[NetworkSync] Received schedule update");
         // Only update if schedule is different to avoid loops
@@ -480,7 +485,8 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
           // Merge schedule but NEVER import automations from master
           const merged = mergeScheduleWithLocalAutomations(scheduleRef.current, syncedSchedule);
-          setSchedule(merged);
+          const withAutomations = applySmartAutomationsToSchedule(merged);
+          setSchedule(withAutomations);
 
           const currentSyncSettings = loadNetworkSyncSettings();
           if (currentSyncSettings.followMasterTimer) {
@@ -496,8 +502,8 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
             // Master started (or re-announced) a session; only *trigger* actions on index change
             if (syncedCurrentSessionIndex !== lastTriggeredSessionIndexRef.current) {
               lastTriggeredSessionIndexRef.current = syncedCurrentSessionIndex;
-              runLocalAutomations(syncedCurrentSessionIndex, merged);
-              startSessionLocally(syncedCurrentSessionIndex, merged);
+              runLocalAutomations(syncedCurrentSessionIndex, withAutomations);
+              startSessionLocally(syncedCurrentSessionIndex, withAutomations);
             }
           } else {
             setCurrentSessionIndex(syncedCurrentSessionIndex);
@@ -514,7 +520,8 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
           if (newKey !== lastBroadcastRef.current) {
             lastBroadcastRef.current = newKey;
             const merged = mergeScheduleWithLocalAutomations(scheduleRef.current, syncedSchedule);
-            setSchedule(merged);
+            const withAutomations = applySmartAutomationsToSchedule(merged);
+            setSchedule(withAutomations);
             const currentSyncSettings = loadNetworkSyncSettings();
             if (currentSyncSettings.followMasterTimer && syncedCurrentSessionIndex !== undefined) {
               // Always track what master says is active (if included in full state)
@@ -528,8 +535,8 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
               if (syncedCurrentSessionIndex !== lastTriggeredSessionIndexRef.current) {
                 lastTriggeredSessionIndexRef.current = syncedCurrentSessionIndex;
-                runLocalAutomations(syncedCurrentSessionIndex, merged);
-                startSessionLocally(syncedCurrentSessionIndex, merged);
+                runLocalAutomations(syncedCurrentSessionIndex, withAutomations);
+                startSessionLocally(syncedCurrentSessionIndex, withAutomations);
               }
             } else if (syncedCurrentSessionIndex !== undefined) {
               setCurrentSessionIndex(syncedCurrentSessionIndex);
