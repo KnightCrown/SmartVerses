@@ -788,6 +788,25 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return await stopTimerOnAllEnabled();
   }, []);
 
+  useEffect(() => {
+    let unlisten: null | (() => void) = null;
+
+    (async () => {
+      try {
+        const events = await import("@tauri-apps/api/event");
+        unlisten = await events.listen("api-timer-stop", async () => {
+          await stopTimer();
+        });
+      } catch (error) {
+        console.warn("[API] Failed to listen for timer stop events:", error);
+      }
+    })();
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [stopTimer]);
+
   // Mark a session as triggered
   const markSessionTriggered = useCallback((sessionId: number) => {
     setTriggeredSessions((prev) => new Set(prev).add(sessionId));
