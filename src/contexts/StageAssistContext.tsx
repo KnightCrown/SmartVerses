@@ -183,6 +183,7 @@ type StageAssistContextValue = {
   // triggered sessions tracking (session IDs that have been triggered)
   triggeredSessions: Set<number>;
   markSessionTriggered: (sessionId: number) => void;
+  resetTriggeredSession: (sessionId: number) => void;
   resetTriggeredSessions: () => void;
   isSessionTriggered: (sessionId: number) => boolean;
 
@@ -802,6 +803,16 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setTriggeredSessions((prev) => new Set(prev).add(sessionId));
   }, []);
 
+  // Reset a single triggered session (allows re-triggering)
+  const resetTriggeredSession = useCallback((sessionId: number) => {
+    setTriggeredSessions((prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+  }, []);
+
   // Reset all triggered sessions (allows re-triggering)
   const resetTriggeredSessions = useCallback(() => {
     setTriggeredSessions(new Set());
@@ -836,6 +847,7 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setCurrentSessionIndex,
       triggeredSessions,
       markSessionTriggered,
+      resetTriggeredSession,
       resetTriggeredSessions,
       isSessionTriggered,
       countdownHours,
@@ -862,6 +874,7 @@ export const StageAssistProvider: React.FC<{ children: React.ReactNode }> = ({ c
       currentSessionIndex,
       triggeredSessions,
       markSessionTriggered,
+      resetTriggeredSession,
       resetTriggeredSessions,
       isSessionTriggered,
       countdownHours,

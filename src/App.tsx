@@ -18,6 +18,7 @@ import {
   FaBible,
   FaCircle,
   FaUser,
+  FaTimes,
 } from "react-icons/fa";
 import "./App.css";
 import { isOnboardingCompleted } from "./types/onboarding";
@@ -113,11 +114,23 @@ function Navigation({
   const navigate = useNavigate();
   const { timerState, getNextSession, goNextSession } = useStageAssist();
   const nextSession = getNextSession();
+  const [isTimerBarDismissed, setIsTimerBarDismissed] = useState(false);
+  const isTimerPage = location.pathname.startsWith("/stage-assist");
 
   // Hide navigation on the notepad page for a cleaner experience
   if (location.pathname.includes("/live-slides/notepad/")) {
     return null;
   }
+
+  useEffect(() => {
+    if (!timerState.isRunning) {
+      setIsTimerBarDismissed(false);
+    }
+  }, [timerState.isRunning]);
+
+  useEffect(() => {
+    setIsTimerBarDismissed(false);
+  }, [timerState.sessionName]);
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -194,7 +207,7 @@ function Navigation({
         <span>Help</span>
       </Link>
 
-      {timerState.isRunning && (
+      {timerState.isRunning && !isTimerPage && !isTimerBarDismissed && (
         <div
           style={{
             marginLeft: "auto",
@@ -258,6 +271,24 @@ function Navigation({
             title={nextSession ? "Start next session timer" : "No next session"}
           >
             Go Next
+          </button>
+          <button
+            onClick={() => setIsTimerBarDismissed(true)}
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: "rgba(255,255,255,0.06)",
+              color: "inherit",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+            }}
+            title="Hide timer bar"
+          >
+            <FaTimes size={12} />
           </button>
         </div>
       )}

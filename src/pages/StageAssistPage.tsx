@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import {
   FaPlay,
   FaStop,
@@ -19,6 +19,9 @@ import {
   FaChevronDown,
   FaChevronRight,
   FaCompress,
+  FaArrowRight,
+  FaClock,
+  FaHourglassHalf,
 } from "react-icons/fa";
 import {
   ScheduleItem,
@@ -46,6 +49,7 @@ import ImageScheduleUploadModal from "../components/ImageScheduleUploadModal";
 import RemoteAccessLinkModal from "../components/RemoteAccessLinkModal";
 import ScheduleAutomationModal from "../components/ScheduleAutomationModal";
 import TimerTemplatesModal from "../components/TimerTemplatesModal";
+import ContextMenu from "../components/ContextMenu";
 import "../App.css";
 
 const StageAssistPage: React.FC = () => {
@@ -74,6 +78,7 @@ const StageAssistPage: React.FC = () => {
     stopTimer,
     getNextSession,
     resetTriggeredSessions,
+    resetTriggeredSession,
     isSessionTriggered,
   } = useStageAssist();
 
@@ -131,6 +136,12 @@ const StageAssistPage: React.FC = () => {
   // Timer Templates Modal state
   const [showTimerTemplatesModal, setShowTimerTemplatesModal] = useState(false);
   const [timerTemplatesMode, setTimerTemplatesMode] = useState<"save" | "load">("load");
+  const [triggerContextMenu, setTriggerContextMenu] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    itemId: number | null;
+  }>({ isOpen: false, x: 0, y: 0, itemId: null });
 
   // Collapse state for timer sections (compact view collapses all)
   const [compactView, setCompactView] = useState(() => {
@@ -1080,11 +1091,30 @@ const StageAssistPage: React.FC = () => {
     setTimeout(() => setToast(null), 4000);
   };
 
+  const closeTriggerContextMenu = useCallback(() => {
+    setTriggerContextMenu({ isOpen: false, x: 0, y: 0, itemId: null });
+  }, []);
+
   const nextSession = getNextSession();
   const nextSessionIndex =
     currentSessionIndex !== null && nextSession
       ? schedule.findIndex((s) => s.id === nextSession.id)
       : -1;
+  const triggerContextMenuTarget = triggerContextMenu.itemId
+    ? schedule.find((item) => item.id === triggerContextMenu.itemId)
+    : null;
+  const triggerContextMenuItems = triggerContextMenuTarget
+    ? [
+        {
+          label: "Reset trigger",
+          disabled: !isSessionTriggered(triggerContextMenuTarget.id),
+          onClick: () => {
+            resetTriggeredSession(triggerContextMenuTarget.id);
+            showToast("Session trigger reset", "success");
+          },
+        },
+      ]
+    : [];
 
   return (
     <div
@@ -1455,38 +1485,93 @@ const StageAssistPage: React.FC = () => {
             {/* Next Session */}
             <div
               style={{
-                backgroundColor: "var(--timer-next-bg)",
-                borderRadius: "12px",
-                padding: "var(--spacing-6)",
-                textAlign: "center",
-                color: "white",
+                backgroundColor: "var(--app-input-bg-color)",
+                borderRadius: "14px",
+                padding: "var(--spacing-4)",
+                border: "1px solid var(--app-border-color)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                minHeight: "160px",
+                fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
               }}
             >
               <div
                 style={{
-                  fontSize: "1rem",
-                  fontWeight: 600,
-                  marginBottom: "var(--spacing-2)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "var(--spacing-2)",
                 }}
               >
-                NEXT
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                      fontSize: "1em",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: "var(--app-text-color-secondary)",
+                  }}
+                >
+                  <FaArrowRight style={{ opacity: 0.7 }} />
+                  Up next
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.7rem",
+                    padding: "4px 10px",
+                    borderRadius: "999px",
+                    backgroundColor: "rgba(249, 115, 22, 0.15)",
+                    color: "#f97316",
+                    fontWeight: 700,
+                  }}
+                >
+                  {nextSession ? "Scheduled" : "None"}
+                </div>
               </div>
               {nextSession ? (
                 <>
                   <div
                     style={{
-                      fontSize: "1.25rem",
-                      marginBottom: "var(--spacing-1)",
+                      fontSize: "2rem",
+                      fontWeight: 600,
                     }}
                   >
                     {nextSession.session}
                   </div>
-                  <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>
-                    {nextSession.startTime}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: "8px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "2rem",
+                        fontWeight: 700,
+                        fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
+                      }}
+                    >
+                      {nextSession.startTime}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "var(--app-text-color-secondary)",
+                      }}
+                    >
+                      Start
+                    </span>
                   </div>
                 </>
               ) : (
-                <div style={{ opacity: 0.7 }}>No next session</div>
+                <div style={{ color: "var(--app-text-color-secondary)" }}>
+                  No next session
+                </div>
               )}
             </div>
 
@@ -1494,28 +1579,93 @@ const StageAssistPage: React.FC = () => {
             <div
               style={{
                 backgroundColor: timerState.isOverrun
-                  ? "#770a0a"
-                  : "rgb(34, 197, 94)",
-                borderRadius: "12px",
-                padding: "var(--spacing-6)",
-                textAlign: "center",
-                color: "white",
+                  ? "rgba(127, 29, 29, 0.2)"
+                  : "rgba(34, 197, 94, 0.16)",
+                border: `1px solid ${
+                  timerState.isOverrun
+                    ? "rgba(239, 68, 68, 0.45)"
+                    : "rgba(34, 197, 94, 0.45)"
+                }`,
+                borderRadius: "14px",
+                padding: "var(--spacing-4)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                minHeight: "160px",
+                fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
               }}
             >
-              <div style={{ fontSize: "1rem", marginBottom: "var(--spacing-2)" }}>
-                {timerState.sessionName || "Timer"}
-              </div>
               <div
                 style={{
-                  fontSize: "4rem",
-                  fontWeight: 700,
-                  fontFamily: "monospace",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: "var(--spacing-4)",
                 }}
               >
-                {formatTime(timerState.timeLeft)}
-              </div>
-              <div style={{ fontSize: "0.875rem", opacity: 0.8 }}>
-                {timerState.endTime ? `Until ${timerState.endTime}` : "Current"}
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      fontSize: "1em",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      color: "var(--app-text-color-secondary)",
+                    }}
+                  >
+                    <FaClock style={{ opacity: 0.7 }} />
+                    Live timer
+                  </div>
+                  <div style={{ fontSize: "2rem", fontWeight: 600 }}>
+                    {timerState.sessionName || "Timer"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "var(--app-text-color-secondary)",
+                    }}
+                  >
+                    {timerState.endTime ? `Ends at ${timerState.endTime}` : "Current"}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: "10px",
+                    flex: 1,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      backgroundColor: timerState.isOverrun
+                        ? "rgba(239, 68, 68, 0.15)"
+                        : "rgba(34, 197, 94, 0.2)",
+                      color: timerState.isOverrun ? "#f87171" : "#22c55e",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {timerState.isOverrun ? "Overrun" : "Running"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "7rem",
+                      fontWeight: 800,
+                      fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
+                      lineHeight: 1,
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    {formatTime(timerState.timeLeft)}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1538,10 +1688,11 @@ const StageAssistPage: React.FC = () => {
         <div
           ref={compactCountdownRef}
           style={{
-            backgroundColor: "rgb(29, 78, 216)",
+            backgroundColor: "var(--app-header-bg)",
+            border: "1px solid var(--app-border-color)",
             borderRadius: "12px",
             padding: 0,
-            color: "white",
+            color: "var(--app-text-color)",
             overflow: "hidden",
           }}
         >
@@ -1555,9 +1706,9 @@ const StageAssistPage: React.FC = () => {
               alignItems: "center",
               justifyContent: "space-between",
               padding: "var(--spacing-2) var(--spacing-4)",
-              backgroundColor: "rgba(0,0,0,0.15)",
+              backgroundColor: "rgba(0,0,0,0.2)",
               border: "none",
-              color: "white",
+              color: "var(--app-text-color)",
               cursor: "pointer",
               fontSize: "1rem",
               fontWeight: 600,
@@ -1565,7 +1716,10 @@ const StageAssistPage: React.FC = () => {
             }}
             title={isCountdownTimerCollapsed ? "Expand countdown timer" : "Collapse"}
           >
-            <span>Count Down Timer</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <FaHourglassHalf style={{ opacity: 0.7 }} />
+              Count Down Timer
+            </span>
             {isCountdownTimerCollapsed ? (
               <FaChevronRight size={14} style={{ opacity: 0.9 }} />
             ) : (
@@ -1578,17 +1732,26 @@ const StageAssistPage: React.FC = () => {
           <div
             style={{
               display: "flex",
-              gap: "var(--spacing-2)",
+              gap: "var(--spacing-3)",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
             }}
           >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--spacing-2)",
+                flexWrap: "wrap",
+              }}
+            >
             <div style={{ textAlign: "center" }}>
               <label
                 style={{
                   display: "block",
                   fontSize: "0.8rem",
-                  opacity: 0.95,
+                  color: "var(--app-text-color-secondary)",
                   fontWeight: 600,
                   marginBottom: "6px",
                 }}
@@ -1620,11 +1783,11 @@ const StageAssistPage: React.FC = () => {
                   lineHeight: "58px",
                   padding: "0",
                   fontWeight: 600,
-                  border: "2px solid rgba(255,255,255,0.7)",
+                  border: "1px solid var(--app-border-color)",
                   borderRadius: "8px",
-                  backgroundColor: "rgba(255,255,255,0.25)",
-                  color: "#ffffff",
-                  fontFamily: "monospace",
+                  backgroundColor: "var(--app-input-bg-color)",
+                  color: "var(--app-input-text-color)",
+                  fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
                 }}
               />
             </div>
@@ -1633,6 +1796,7 @@ const StageAssistPage: React.FC = () => {
                 fontSize: "1.5rem",
                 paddingTop: "20px",
                 fontWeight: 700,
+                color: "var(--app-text-color-secondary)",
               }}
             >
               :
@@ -1642,7 +1806,7 @@ const StageAssistPage: React.FC = () => {
                 style={{
                   display: "block",
                   fontSize: "0.8rem",
-                  opacity: 0.95,
+                  color: "var(--app-text-color-secondary)",
                   fontWeight: 600,
                   marginBottom: "6px",
                 }}
@@ -1678,11 +1842,11 @@ const StageAssistPage: React.FC = () => {
                   lineHeight: "58px",
                   padding: "0",
                   fontWeight: 600,
-                  border: "2px solid rgba(255,255,255,0.7)",
+                  border: "1px solid var(--app-border-color)",
                   borderRadius: "8px",
-                  backgroundColor: "rgba(255,255,255,0.25)",
-                  color: "#ffffff",
-                  fontFamily: "monospace",
+                  backgroundColor: "var(--app-input-bg-color)",
+                  color: "var(--app-input-text-color)",
+                  fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
                 }}
               />
             </div>
@@ -1691,6 +1855,7 @@ const StageAssistPage: React.FC = () => {
                 fontSize: "1.5rem",
                 paddingTop: "20px",
                 fontWeight: 700,
+                color: "var(--app-text-color-secondary)",
               }}
             >
               :
@@ -1700,7 +1865,7 @@ const StageAssistPage: React.FC = () => {
                 style={{
                   display: "block",
                   fontSize: "0.8rem",
-                  opacity: 0.95,
+                  color: "var(--app-text-color-secondary)",
                   fontWeight: 600,
                   marginBottom: "6px",
                 }}
@@ -1736,19 +1901,21 @@ const StageAssistPage: React.FC = () => {
                   lineHeight: "58px",
                   padding: "0",
                   fontWeight: 600,
-                  border: "2px solid rgba(255,255,255,0.7)",
+                  border: "1px solid var(--app-border-color)",
                   borderRadius: "8px",
-                  backgroundColor: "rgba(255,255,255,0.25)",
-                  color: "#ffffff",
-                  fontFamily: "monospace",
+                  backgroundColor: "var(--app-input-bg-color)",
+                  color: "var(--app-input-text-color)",
+                  fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
                 }}
               />
+            </div>
             </div>
             <div
               style={{
                 display: "flex",
-                gap: "var(--spacing-2)",
-                marginLeft: "var(--spacing-4)",
+                flexDirection: "column",
+                gap: "8px",
+                minWidth: "140px",
               }}
             >
               <button
@@ -1794,44 +1961,61 @@ const StageAssistPage: React.FC = () => {
           <div
             style={{
               backgroundColor: timerState.isOverrun
-                ? "#770a0a"
-                : "rgb(34, 197, 94)",
+                ? "rgba(127, 29, 29, 0.2)"
+                : "rgba(34, 197, 94, 0.16)",
+              border: `1px solid ${
+                timerState.isOverrun
+                  ? "rgba(239, 68, 68, 0.45)"
+                  : "rgba(34, 197, 94, 0.45)"
+              }`,
               borderRadius: "12px",
               padding: "var(--spacing-3)",
-              color: "white",
-              textAlign: "center",
+              color: "var(--app-text-color)",
               display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              gap: "2px",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "var(--spacing-4)",
               height: compactTimerHeight ? `${compactTimerHeight}px` : "auto",
               boxSizing: "border-box",
             }}
           >
-            <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
-              {timerState.sessionName || "Timer"}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "4px",
+                minWidth: 0,
+              }}
+            >
+              <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+                {timerState.sessionName || "Timer"}
+              </div>
+              <div style={{ fontSize: "0.75rem", opacity: 0.9 }}>
+                {timerState.endTime ? `Until ${timerState.endTime}` : "Current"}
+              </div>
             </div>
             <div
               style={{
-                fontSize: "2rem",
-                fontWeight: 700,
-                fontFamily: "monospace",
-                lineHeight: 1.1,
+                fontSize: "5em",
+                fontWeight: 800,
+                fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
+                lineHeight: 1,
+                letterSpacing: "0.02em",
+                textAlign: "right",
+                flexShrink: 0,
               }}
             >
               {formatTime(timerState.timeLeft)}
-            </div>
-            <div style={{ fontSize: "0.75rem", opacity: 0.9 }}>
-              {timerState.endTime ? `Until ${timerState.endTime}` : "Current"}
             </div>
           </div>
         ) : (
         <div
           style={{
-            backgroundColor: "rgb(29, 78, 216)",
+            backgroundColor: "var(--app-header-bg)",
+            border: "1px solid var(--app-border-color)",
             borderRadius: "12px",
             padding: 0,
-            color: "white",
+            color: "var(--app-text-color)",
             overflow: "hidden",
           }}
         >
@@ -1844,9 +2028,9 @@ const StageAssistPage: React.FC = () => {
               alignItems: "center",
               justifyContent: "space-between",
               padding: "var(--spacing-2) var(--spacing-4)",
-              backgroundColor: "rgba(0,0,0,0.15)",
+              backgroundColor: "rgba(0,0,0,0.2)",
               border: "none",
-              color: "white",
+              color: "var(--app-text-color)",
               cursor: "pointer",
               fontSize: "1rem",
               fontWeight: 600,
@@ -1854,7 +2038,10 @@ const StageAssistPage: React.FC = () => {
             }}
             title={isCountDownToTimeCollapsed ? "Expand count down to time" : "Collapse"}
           >
-            <span>Count Down to Time</span>
+            <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <FaClock style={{ opacity: 0.7 }} />
+              Count Down to Time
+            </span>
             {isCountDownToTimeCollapsed ? (
               <FaChevronRight size={14} style={{ opacity: 0.9 }} />
             ) : (
@@ -1866,17 +2053,26 @@ const StageAssistPage: React.FC = () => {
           <div
             style={{
               display: "flex",
-              gap: "var(--spacing-2)",
+              gap: "var(--spacing-3)",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
             }}
           >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--spacing-2)",
+                flexWrap: "wrap",
+              }}
+            >
             <div style={{ textAlign: "center" }}>
               <label
                 style={{
                   display: "block",
                   fontSize: "0.8rem",
-                  opacity: 0.95,
+                  color: "var(--app-text-color-secondary)",
                   fontWeight: 600,
                   marginBottom: "6px",
                 }}
@@ -1908,11 +2104,11 @@ const StageAssistPage: React.FC = () => {
                   lineHeight: "58px",
                   padding: "0",
                   fontWeight: 600,
-                  border: "2px solid rgba(255,255,255,0.7)",
+                  border: "1px solid var(--app-border-color)",
                   borderRadius: "8px",
-                  backgroundColor: "rgba(255,255,255,0.25)",
-                  color: "#ffffff",
-                  fontFamily: "monospace",
+                  backgroundColor: "var(--app-input-bg-color)",
+                  color: "var(--app-input-text-color)",
+                  fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
                 }}
               />
             </div>
@@ -1921,7 +2117,7 @@ const StageAssistPage: React.FC = () => {
                 style={{
                   display: "block",
                   fontSize: "0.8rem",
-                  opacity: 0.95,
+                  color: "var(--app-text-color-secondary)",
                   fontWeight: 600,
                   marginBottom: "6px",
                 }}
@@ -1942,19 +2138,19 @@ const StageAssistPage: React.FC = () => {
                   lineHeight: "58px",
                   padding: "0 34px 0 14px",
                   fontWeight: 600,
-                  border: "2px solid rgba(255,255,255,0.7)",
+                  border: "1px solid var(--app-border-color)",
                   borderRadius: "8px",
-                  backgroundColor: "rgba(255,255,255,0.25)",
-                  color: "#ffffff",
-                  fontFamily: "monospace",
+                  backgroundColor: "var(--app-input-bg-color)",
+                  color: "var(--app-input-text-color)",
+                  fontFamily: "Inter, Avenir, Helvetica, Arial, sans-serif",
                   cursor: "pointer",
                 }}
               >
                 <option
                   value="AM"
                   style={{
-                    backgroundColor: "rgb(29, 78, 216)",
-                    color: "#ffffff",
+                    backgroundColor: "var(--app-header-bg)",
+                    color: "var(--app-text-color)",
                   }}
                 >
                   AM
@@ -1962,19 +2158,21 @@ const StageAssistPage: React.FC = () => {
                 <option
                   value="PM"
                   style={{
-                    backgroundColor: "rgb(29, 78, 216)",
-                    color: "#ffffff",
+                    backgroundColor: "var(--app-header-bg)",
+                    color: "var(--app-text-color)",
                   }}
                 >
                   PM
                 </option>
               </select>
             </div>
+            </div>
             <div
               style={{
                 display: "flex",
-                gap: "var(--spacing-2)",
-                marginLeft: "var(--spacing-4)",
+                flexDirection: "column",
+                gap: "8px",
+                minWidth: "140px",
               }}
             >
               <button
@@ -2468,6 +2666,15 @@ const StageAssistPage: React.FC = () => {
                     {settings.triggerOnce && isSessionTriggered(item.id) ? (
                       <button
                         disabled
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          setTriggerContextMenu({
+                            isOpen: true,
+                            x: event.clientX,
+                            y: event.clientY,
+                            itemId: item.id,
+                          });
+                        }}
                         style={{
                           padding: "var(--spacing-2) var(--spacing-3)",
                           backgroundColor: "rgb(34, 197, 94)",
@@ -2718,6 +2925,14 @@ const StageAssistPage: React.FC = () => {
           <span style={{ fontSize: "0.875rem" }}>Trigger Once</span>
         </label>
       </div>
+
+      <ContextMenu
+        isOpen={triggerContextMenu.isOpen}
+        x={triggerContextMenu.x}
+        y={triggerContextMenu.y}
+        menuItems={triggerContextMenuItems}
+        onClose={closeTriggerContextMenu}
+      />
 
       {/* Toast */}
       {toast && (
