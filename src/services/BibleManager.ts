@@ -1,5 +1,5 @@
 
-import { exists, mkdir, readDir, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { mkdir, readDir, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
 
 export interface BibleVerse {
     v: number;

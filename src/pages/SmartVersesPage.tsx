@@ -2952,7 +2952,6 @@ const transcriptionNextPromptAtRef = useRef<number | null>(null);
                     border: "1px solid var(--app-border-color)"
                  }}
                  value={ref.translationId || selectedBibleId} // Fallback to page context if not specific
-                 fontSize="0.7rem"
                  onClick={(e) => e.stopPropagation()} // Prevent card collapse
                  onChange={async (e) => {
                     const newTranslationId = e.target.value;
