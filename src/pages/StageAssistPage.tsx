@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   FaPlay,
   FaStop,
@@ -31,15 +31,17 @@ import {
   formatStageAssistTime,
   useStageAssist,
 } from "../contexts/StageAssistContext";
-import { loadNetworkSyncSettings } from "../services/networkSyncService";
+import { getSyncStatus, loadNetworkSyncSettings, SyncStatus } from "../services/networkSyncService";
 import { loadLiveSlidesSettings } from "../services/liveSlideService";
-import { mergeScheduleWithLocalAutomations } from "../utils/scheduleSync";
+import {
+  applySmartAutomationsToSchedule,
+  mergeScheduleWithLocalAutomations,
+} from "../utils/scheduleSync";
 import LoadScheduleModal from "../components/LoadScheduleModal";
 import ImageScheduleUploadModal from "../components/ImageScheduleUploadModal";
 import RemoteAccessLinkModal from "../components/RemoteAccessLinkModal";
 import ScheduleAutomationModal from "../components/ScheduleAutomationModal";
 import TimerTemplatesModal from "../components/TimerTemplatesModal";
-import { findMatchingAutomation } from "../utils/testimoniesStorage";
 import "../App.css";
 
 // Recording automation types
@@ -87,22 +89,6 @@ function normalizeAutomations(item: ScheduleItem): ScheduleItemAutomation[] {
     if (normalized) byType.set(normalized.type, normalized);
   }
 
-  return Array.from(byType.values());
-}
-
-function mergeAutomations(
-  existing: ScheduleItemAutomation[],
-  incoming: ScheduleItemAutomation[]
-): ScheduleItemAutomation[] {
-  const byType = new Map<
-    ScheduleItemAutomation["type"],
-    ScheduleItemAutomation
-  >();
-  for (const a of existing) byType.set(a.type, a);
-  for (const a of incoming) {
-    // do not override an existing automation of the same type
-    if (!byType.has(a.type)) byType.set(a.type, a);
-  }
   return Array.from(byType.values());
 }
 
@@ -210,6 +196,51 @@ const StageAssistPage: React.FC = () => {
     (networkSyncSettings.mode === "slave" || networkSyncSettings.mode === "peer") &&
     networkSyncSettings.followMasterTimer;
 
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncStatusError, setSyncStatusError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const refreshStatus = async () => {
+      try {
+        const status = await getSyncStatus();
+        if (!isMounted) return;
+        setSyncStatus(status);
+        setSyncStatusError(null);
+      } catch (err) {
+        if (!isMounted) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setSyncStatusError(msg);
+      }
+    };
+
+    refreshStatus();
+    const interval = window.setInterval(refreshStatus, 5000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const followMasterStatus = useMemo(() => {
+    if (networkSyncSettings.mode !== "slave" && networkSyncSettings.mode !== "peer") {
+      return null;
+    }
+    if (!networkSyncSettings.remoteHost.trim()) {
+      return { text: "Master host not configured.", tone: "error" as const };
+    }
+    if (syncStatusError) {
+      return { text: `Network sync error: ${syncStatusError}`, tone: "error" as const };
+    }
+    if (!syncStatus) {
+      return { text: "Checking connection...", tone: "muted" as const };
+    }
+    if (!syncStatus.clientConnected) {
+      return { text: "Disconnected from master.", tone: "warn" as const };
+    }
+    return { text: "Connected to master.", tone: "ok" as const };
+  }, [networkSyncSettings.mode, networkSyncSettings.remoteHost, syncStatus, syncStatusError]);
+
   // Close load schedule dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -280,8 +311,12 @@ const StageAssistPage: React.FC = () => {
         })
       );
 
-      // Merge: never import automations from master; preserve our local ones by session name
-      setSchedule((prev) => mergeScheduleWithLocalAutomations(prev, transformedSchedule));
+      // Merge: never import automations from master; preserve local ones + apply smart rules
+      setSchedule((prev) =>
+        applySmartAutomationsToSchedule(
+          mergeScheduleWithLocalAutomations(prev, transformedSchedule)
+        )
+      );
 
       // Update current session index if provided
       if (typeof data.currentSessionIndex === "number") {
@@ -598,30 +633,15 @@ const StageAssistPage: React.FC = () => {
     }
   };
 
-  // Apply smart automations when schedule changes
+  const scheduleAutomationKey = useMemo(
+    () => schedule.map((item) => `${item.id}:${item.session}`).join("|"),
+    [schedule]
+  );
+
+  // Apply smart automations when sessions change (new/imported/renamed)
   useEffect(() => {
-    // Check each schedule item for matching smart rules
-    setSchedule((prev) => {
-      let hasChanges = false;
-      const updated = prev.map((item) => {
-        // Check for matching smart rule
-        const matchingAutomations = findMatchingAutomation(item.session);
-        if (!matchingAutomations || matchingAutomations.length === 0)
-          return item;
-
-        const existing = normalizeAutomations(item);
-        const merged = mergeAutomations(existing, matchingAutomations);
-
-        // only update if we added something new
-        if (merged.length === existing.length) return item;
-
-        hasChanges = true;
-        return { ...item, automations: merged };
-      });
-
-      return hasChanges ? updated : prev;
-    });
-  }, [schedule.length]); // Re-run when schedule items are added
+    setSchedule((prev) => applySmartAutomationsToSchedule(prev));
+  }, [scheduleAutomationKey]);
 
   // Start countdown timer
   const handleStartCountdown = async () => {
@@ -1826,6 +1846,25 @@ const StageAssistPage: React.FC = () => {
               When enabled, this device becomes display-only: it follows the master’s active
               session and starts/stops its local timer + local automations automatically.
             </div>
+            {followMasterStatus && (
+              <div
+                style={{
+                  marginTop: "6px",
+                  fontSize: "0.85em",
+                  fontWeight: 600,
+                  color:
+                    followMasterStatus.tone === "ok"
+                      ? "#22c55e"
+                      : followMasterStatus.tone === "warn"
+                      ? "#f59e0b"
+                      : followMasterStatus.tone === "error"
+                      ? "#ef4444"
+                      : "var(--app-text-color-secondary)",
+                }}
+              >
+                Status: {followMasterStatus.text}
+              </div>
+            )}
           </div>
           <label
             style={{

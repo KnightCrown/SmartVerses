@@ -276,6 +276,7 @@ struct ServerState {
     timer_state: RwLock<TimerState>,
     display_state: RwLock<DisplayState>,
     pinned_transcription_clients: RwLock<HashMap<String, PinnedTranscriptionClient>>,
+    api_playlists: RwLock<Option<serde_json::Value>>,
     broadcast_tx: broadcast::Sender<String>,
     running: RwLock<bool>,
     port: RwLock<u16>,
@@ -322,6 +323,7 @@ lazy_static::lazy_static! {
             settings: serde_json::json!({}),
         }),
         pinned_transcription_clients: RwLock::new(HashMap::new()),
+        api_playlists: RwLock::new(None),
         broadcast_tx: broadcast::channel(100).0,
         running: RwLock::new(false),
         port: RwLock::new(9876),
@@ -702,6 +704,32 @@ async fn run_combined_server(port: u16, app: tauri::AppHandle) -> Result<(), Str
             }
         });
 
+    // API: Playlists (full slides) for network import
+    let api_playlists_state = state.clone();
+    let api_playlists_route = warp::path("api")
+        .and(warp::path("playlists"))
+        .and(warp::path::end())
+        .and_then(move || {
+            let state_clone = api_playlists_state.clone();
+            async move {
+                if !*state_clone.api_enabled.read().await {
+                    return Ok::<_, warp::Rejection>(json_response(
+                        serde_json::json!({ "error": "api_disabled" }),
+                        StatusCode::FORBIDDEN,
+                    ));
+                }
+
+                let playlists = state_clone
+                    .api_playlists
+                    .read()
+                    .await
+                    .clone()
+                    .unwrap_or_else(|| serde_json::json!([]));
+                let response = serde_json::json!({ "playlists": playlists });
+                Ok::<_, warp::Rejection>(json_response(response, StatusCode::OK))
+            }
+        });
+
     // API: Remote transcription pin — GET list pinned clients, POST pin a client
     let transcription_pin_list_state = state.clone();
     let transcription_pin_list_route = warp::path("api")
@@ -1053,6 +1081,7 @@ async fn run_combined_server(port: u16, app: tauri::AppHandle) -> Result<(), Str
     let routes = ws_route
         .or(schedule_api_route)
         .or(live_slides_api_route)
+        .or(api_playlists_route)
         .or(transcription_pin_route)
         .or(api_scripture_route)
         .or(api_timer_route)
@@ -3887,6 +3916,13 @@ async fn update_sync_playlists(playlists: serde_json::Value) -> Result<(), Strin
     Ok(())
 }
 
+#[tauri::command]
+async fn update_api_playlists(playlists: serde_json::Value) -> Result<(), String> {
+    let state = SERVER_STATE.clone();
+    *state.api_playlists.write().await = Some(playlists);
+    Ok(())
+}
+
 // ============================================================================
 // MIDI Support
 // ============================================================================
@@ -4071,6 +4107,7 @@ pub fn run() {
             get_sync_server_info,
             broadcast_sync_message,
             update_sync_playlists,
+            update_api_playlists,
             // Live Slides generic broadcast
             broadcast_live_slides_message,
             // MIDI commands

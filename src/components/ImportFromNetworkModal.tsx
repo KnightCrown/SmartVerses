@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { FaSync, FaCheck, FaCheckDouble, FaCloud } from "react-icons/fa";
-import { Slide, LayoutType } from "../types";
+import { Slide, LayoutType, Playlist, PlaylistItem } from "../types";
 import {
-  fetchSlidesFromMaster,
-  MasterSlidesResponse,
+  fetchPlaylistsFromMaster,
+  MasterPlaylistsResponse,
   loadLiveSlidesSettings,
 } from "../services/liveSlideService";
 import { loadNetworkSyncSettings } from "../services/networkSyncService";
-import { LiveSlideSession, LiveSlide } from "../types/liveSlides";
 import "../App.css";
 
 interface ImportFromNetworkModalProps {
@@ -19,20 +18,19 @@ interface ImportFromNetworkModalProps {
     slides: Pick<Slide, "text" | "layout" | "isAutoScripture">[],
     options?: { liveSlidesSessionId?: string; liveSlidesLinked?: boolean }
   ) => void;
-  existingSessionIds: string[]; // IDs of sessions already in local playlists
 }
 
-const LIVE_SLIDES_TEMPLATE_NAME = "Live Slides";
+const itemKey = (playlistId: string, itemId: string) =>
+  `${playlistId}::${itemId}`;
 
 const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
   isOpen,
   onClose,
   onImport,
-  existingSessionIds,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [masterSessions, setMasterSessions] = useState<LiveSlideSession[]>([]);
+  const [masterPlaylists, setMasterPlaylists] = useState<Playlist[]>([]);
   const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(
     new Set()
   );
@@ -49,7 +47,7 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setError(null);
-      setMasterSessions([]);
+      setMasterPlaylists([]);
       setSelectedSessionIds(new Set());
       setImportedCount(0);
       setShowSuccess(false);
@@ -67,34 +65,37 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
 
     setIsLoading(true);
     setError(null);
-    setMasterSessions([]);
+    setMasterPlaylists([]);
     setSelectedSessionIds(new Set());
 
     try {
-      const response: MasterSlidesResponse = await fetchSlidesFromMaster(
+      const response: MasterPlaylistsResponse = await fetchPlaylistsFromMaster(
         masterHost.trim(),
         masterPort
       );
 
-      if (!response.server_running) {
-        setError("Master server is not running");
-        return;
-      }
+      setMasterPlaylists(response.playlists || []);
 
-      setMasterSessions(response.sessions);
-
-      // Auto-select sessions that don't exist locally
-      const newSessions = response.sessions.filter(
-        (s) => !existingSessionIds.includes(s.id)
+      const selectableIds = (response.playlists || []).flatMap((playlist) =>
+        playlist.items.map((item) => itemKey(playlist.id, item.id))
       );
-      setSelectedSessionIds(new Set(newSessions.map((s) => s.id)));
+      setSelectedSessionIds(new Set(selectableIds));
 
-      if (response.sessions.length === 0) {
-        setError("No sessions found on master server");
+      if (!response.playlists || response.playlists.length === 0) {
+        setError(
+          "No slides found on master server. Make sure API is turned on on the master."
+        );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setError(`Failed to connect to master (${masterHost}:${masterPort}): ${msg}`);
+      const apiDisabled =
+        msg.toLowerCase().includes("api_disabled") ||
+        msg.toLowerCase().includes("403");
+      setError(
+        apiDisabled
+          ? "API is disabled on the master. Make sure API is turned on on the master."
+          : `Failed to connect to master (${masterHost}:${masterPort}): ${msg}`
+      );
     } finally {
       setIsLoading(false);
     }
@@ -113,64 +114,49 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
   };
 
   const selectAll = () => {
-    const selectableSessions = masterSessions.filter(
-      (s) => !existingSessionIds.includes(s.id)
+    const selectableSessions = masterPlaylists.flatMap((playlist) =>
+      playlist.items.map((item) => itemKey(playlist.id, item.id))
     );
-    setSelectedSessionIds(new Set(selectableSessions.map((s) => s.id)));
+    setSelectedSessionIds(new Set(selectableSessions));
   };
 
   const selectNone = () => {
     setSelectedSessionIds(new Set());
   };
 
-  const convertLiveSlidesToSlides = (
-    liveSlides: LiveSlide[]
+  const convertPlaylistItemSlides = (
+    item: PlaylistItem
   ): Pick<Slide, "text" | "layout" | "isAutoScripture">[] => {
-    return liveSlides.map((liveSlide) => {
-      const text = liveSlide.items.map((item) => item.text).join("\n");
-      const itemCount = liveSlide.items.length;
-      const layoutName = (() => {
-        const names: Record<number, string> = {
-          1: "one",
-          2: "two",
-          3: "three",
-          4: "four",
-          5: "five",
-          6: "six",
-        };
-        return names[Math.min(itemCount, 6)] || "one";
-      })();
-      const layout = `${layoutName}-line` as LayoutType;
-
-      return { text, layout, isAutoScripture: false };
-    });
+    const ordered = [...item.slides].sort((a, b) => a.order - b.order);
+    return ordered.map((slide) => ({
+      text: slide.text,
+      layout: slide.layout as LayoutType,
+      isAutoScripture: slide.isAutoScripture,
+    }));
   };
 
   const handleImport = () => {
     let imported = 0;
 
-    masterSessions.forEach((session) => {
-      if (selectedSessionIds.has(session.id)) {
-        const slides = convertLiveSlidesToSlides(session.slides);
-        onImport(session.name, LIVE_SLIDES_TEMPLATE_NAME, slides, {
-          liveSlidesSessionId: session.id,
-          liveSlidesLinked: false, // Not live-linked since it's a backup import
-        });
-        imported++;
-      }
+    masterPlaylists.forEach((playlist) => {
+      playlist.items.forEach((item) => {
+        const key = itemKey(playlist.id, item.id);
+        if (selectedSessionIds.has(key)) {
+          const slides = convertPlaylistItemSlides(item);
+          onImport(item.title, item.templateName, slides);
+          imported++;
+        }
+      });
     });
 
     setImportedCount(imported);
     setShowSuccess(true);
   };
 
-  const newSessionsCount = masterSessions.filter(
-    (s) => !existingSessionIds.includes(s.id)
-  ).length;
-
-  const existingSessionsCount = masterSessions.filter((s) =>
-    existingSessionIds.includes(s.id)
-  ).length;
+  const totalItemsCount = masterPlaylists.reduce(
+    (sum, playlist) => sum + playlist.items.length,
+    0
+  );
 
   if (!isOpen) return null;
 
@@ -209,7 +195,7 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
                 fontSize: "0.9em",
               }}
             >
-              Successfully imported {importedCount} session
+              Successfully imported {importedCount} item
               {importedCount !== 1 ? "s" : ""} from master.
             </div>
           </div>
@@ -247,7 +233,7 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
               </button>
             </div>
 
-            {isLoading && masterSessions.length === 0 && (
+            {isLoading && masterPlaylists.length === 0 && (
               <div
                 style={{
                   padding: "40px",
@@ -256,7 +242,7 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
                 }}
               >
                 <FaSync className="spin" style={{ fontSize: "24px", marginBottom: "12px" }} />
-                <div>Fetching sessions from master...</div>
+                <div>Fetching slides from master...</div>
               </div>
             )}
 
@@ -276,7 +262,7 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
             )}
 
             {/* Sessions List */}
-            {masterSessions.length > 0 && (
+            {masterPlaylists.length > 0 && (
               <>
                 <div
                   style={{
@@ -288,29 +274,18 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
                 >
                   <div>
                     <span style={{ fontWeight: 600 }}>
-                      Found {masterSessions.length} session
-                      {masterSessions.length !== 1 ? "s" : ""}
+                      Found {totalItemsCount} item
+                      {totalItemsCount !== 1 ? "s" : ""}
                     </span>
-                    {existingSessionsCount > 0 && (
-                      <span
-                        style={{
-                          color: "var(--app-text-color-secondary)",
-                          fontSize: "0.9em",
-                          marginLeft: "8px",
-                        }}
-                      >
-                        ({existingSessionsCount} already imported)
-                      </span>
-                    )}
                   </div>
                   <div style={{ display: "flex", gap: "8px" }}>
                     <button
                       onClick={selectAll}
                       className="btn-sm"
-                      disabled={newSessionsCount === 0}
-                      title="Select all new sessions"
+                      disabled={totalItemsCount === 0}
+                      title="Select all items"
                     >
-                      <FaCheckDouble style={{ marginRight: "4px" }} /> Select All New
+                      <FaCheckDouble style={{ marginRight: "4px" }} /> Select All
                     </button>
                     <button
                       onClick={selectNone}
@@ -331,115 +306,126 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
                     marginBottom: "16px",
                   }}
                 >
-                  {masterSessions.map((session) => {
-                    const isExisting = existingSessionIds.includes(session.id);
-                    const isSelected = selectedSessionIds.has(session.id);
-
-                    return (
+                  {masterPlaylists.map((playlist) => (
+                    <div
+                      key={playlist.id}
+                      style={{
+                        borderBottom: "1px solid var(--app-border-color)",
+                      }}
+                    >
                       <div
-                        key={session.id}
-                        onClick={() => !isExisting && toggleSession(session.id)}
                         style={{
-                          padding: "12px 16px",
-                          borderBottom: "1px solid var(--app-border-color)",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          cursor: isExisting ? "not-allowed" : "pointer",
-                          backgroundColor: isSelected
-                            ? "var(--app-playlist-item-selected-bg)"
-                            : isExisting
-                            ? "rgba(128, 128, 128, 0.1)"
-                            : "transparent",
-                          opacity: isExisting ? 0.6 : 1,
-                          transition: "background-color 0.15s ease",
+                          padding: "10px 14px",
+                          backgroundColor: "var(--app-header-bg)",
+                          fontWeight: 600,
+                          fontSize: "0.9rem",
                         }}
                       >
-                        <div
-                          style={{
-                            width: "20px",
-                            height: "20px",
-                            borderRadius: "4px",
-                            border: `2px solid ${
-                              isSelected
-                                ? "var(--app-primary-color)"
-                                : "var(--app-border-color)"
-                            }`,
-                            backgroundColor: isSelected
-                              ? "var(--app-primary-color)"
-                              : "transparent",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {isSelected && (
-                            <FaCheck
-                              style={{ color: "white", fontSize: "10px" }}
-                            />
-                          )}
-                        </div>
+                        {playlist.name} ({playlist.items.length} item
+                        {playlist.items.length !== 1 ? "s" : ""})
+                      </div>
+                      {playlist.items.map((item) => {
+                        const key = itemKey(playlist.id, item.id);
+                        const isSelected = selectedSessionIds.has(key);
+                        const slideCount = item.slides.length;
+                        const preview = item.slides[0]?.text || "";
 
-                        <div style={{ flex: 1, minWidth: 0 }}>
+                        return (
                           <div
+                            key={key}
+                            onClick={() => toggleSession(key)}
                             style={{
-                              fontWeight: 500,
+                              padding: "12px 16px",
+                              borderTop: "1px solid var(--app-border-color)",
                               display: "flex",
                               alignItems: "center",
-                              gap: "8px",
+                              gap: "12px",
+                              cursor: "pointer",
+                              backgroundColor: isSelected
+                                ? "var(--app-playlist-item-selected-bg)"
+                                : "transparent",
+                              transition: "background-color 0.15s ease",
                             }}
                           >
-                            {session.name}
-                            {isExisting && (
-                              <span
+                            <div
+                              style={{
+                                width: "20px",
+                                height: "20px",
+                                borderRadius: "4px",
+                                border: `2px solid ${
+                                  isSelected
+                                    ? "var(--app-primary-color)"
+                                    : "var(--app-border-color)"
+                                }`,
+                                backgroundColor: isSelected
+                                  ? "var(--app-primary-color)"
+                                  : "transparent",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {isSelected && (
+                                <FaCheck
+                                  style={{ color: "white", fontSize: "10px" }}
+                                />
+                              )}
+                            </div>
+
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
                                 style={{
-                                  fontSize: "0.75em",
-                                  padding: "2px 6px",
-                                  borderRadius: "4px",
-                                  backgroundColor:
-                                    "var(--app-text-color-secondary)",
-                                  color: "var(--app-bg-color)",
+                                  fontWeight: 500,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
                                 }}
                               >
-                                Already Imported
-                              </span>
-                            )}
+                                {item.title}
+                                <span
+                                  style={{
+                                    fontSize: "0.75em",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    backgroundColor:
+                                      "var(--app-text-color-secondary)",
+                                    color: "var(--app-bg-color)",
+                                  }}
+                                >
+                                  {item.templateName}
+                                </span>
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "0.85em",
+                                  color: "var(--app-text-color-secondary)",
+                                  marginTop: "2px",
+                                }}
+                              >
+                                {slideCount} slide{slideCount !== 1 ? "s" : ""}
+                                {preview.trim().length > 0 && (
+                                  <span>
+                                    {" "}
+                                    •{" "}
+                                    {preview.replace(/\s+/g, " ").slice(0, 60)}
+                                    {preview.replace(/\s+/g, " ").length > 60
+                                      ? "..."
+                                      : ""}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div
-                            style={{
-                              fontSize: "0.85em",
-                              color: "var(--app-text-color-secondary)",
-                              marginTop: "2px",
-                            }}
-                          >
-                            {session.slides.length} slide
-                            {session.slides.length !== 1 ? "s" : ""}
-                            {session.slides.length > 0 && (
-                              <span>
-                                {" "}
-                                •{" "}
-                                {session.slides[0].items
-                                  .map((i) => i.text)
-                                  .join(" / ")
-                                  .slice(0, 50)}
-                                {session.slides[0].items
-                                  .map((i) => i.text)
-                                  .join(" / ").length > 50
-                                  ? "..."
-                                  : ""}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
               </>
             )}
 
-            {!isLoading && masterSessions.length === 0 && !error && (
+            {!isLoading && masterPlaylists.length === 0 && !error && (
               <div
                 style={{
                   padding: "40px",
@@ -447,7 +433,8 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
                   color: "var(--app-text-color-secondary)",
                 }}
               >
-                No sessions available on master server.
+                No slides available on master server. Make sure API is turned on
+                on the master.
               </div>
             )}
           </>
@@ -468,7 +455,7 @@ const ImportFromNetworkModal: React.FC<ImportFromNetworkModalProps> = ({
                 className="primary"
                 disabled={selectedSessionIds.size === 0 || isLoading}
               >
-                Import {selectedSessionIds.size} Session
+                Import {selectedSessionIds.size} Item
                 {selectedSessionIds.size !== 1 ? "s" : ""}
               </button>
             </>

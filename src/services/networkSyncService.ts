@@ -313,7 +313,37 @@ class NetworkSyncManager {
   private settings: NetworkSyncSettings;
   private wsClient: NetworkSyncWebSocket | null = null;
   private serverRunning = false;
-  private callbacks: NetworkSyncCallbacks = {};
+  private callbackRegistry = new Map<string, NetworkSyncCallbacks>();
+  private aggregatedCallbacks: NetworkSyncCallbacks = {
+    onPlaylistItemSync: (playlistId, item, action) => {
+      this.callbackRegistry.forEach((callbacks) =>
+        callbacks.onPlaylistItemSync?.(playlistId, item, action)
+      );
+    },
+    onPlaylistItemDelete: (playlistId, itemId) => {
+      this.callbackRegistry.forEach((callbacks) =>
+        callbacks.onPlaylistItemDelete?.(playlistId, itemId)
+      );
+    },
+    onScheduleSync: (schedule, currentSessionIndex) => {
+      this.callbackRegistry.forEach((callbacks) =>
+        callbacks.onScheduleSync?.(schedule, currentSessionIndex)
+      );
+    },
+    onFullStateSync: (playlists, schedule, currentSessionIndex) => {
+      this.callbackRegistry.forEach((callbacks) =>
+        callbacks.onFullStateSync?.(playlists, schedule, currentSessionIndex)
+      );
+    },
+    onConnectionStateChange: (state) => {
+      this.callbackRegistry.forEach((callbacks) =>
+        callbacks.onConnectionStateChange?.(state)
+      );
+    },
+    onError: (error) => {
+      this.callbackRegistry.forEach((callbacks) => callbacks.onError?.(error));
+    },
+  };
 
   private constructor() {
     this.settings = loadNetworkSyncSettings();
@@ -327,9 +357,24 @@ class NetworkSyncManager {
   }
 
   setCallbacks(callbacks: NetworkSyncCallbacks): void {
-    this.callbacks = callbacks;
+    this.callbackRegistry.set("default", callbacks);
+    this.syncCallbacks();
+  }
+
+  registerCallbacks(id: string, callbacks: NetworkSyncCallbacks): () => void {
+    this.callbackRegistry.set(id, callbacks);
+    this.syncCallbacks();
+    return () => this.unregisterCallbacks(id);
+  }
+
+  unregisterCallbacks(id: string): void {
+    this.callbackRegistry.delete(id);
+    this.syncCallbacks();
+  }
+
+  private syncCallbacks(): void {
     if (this.wsClient) {
-      this.wsClient.setCallbacks(callbacks);
+      this.wsClient.setCallbacks(this.aggregatedCallbacks);
     }
   }
 
@@ -364,7 +409,7 @@ class NetworkSyncManager {
         settings.remotePort,
         settings.mode
       );
-      this.wsClient.setCallbacks(this.callbacks);
+      this.wsClient.setCallbacks(this.aggregatedCallbacks);
 
       try {
         await this.wsClient.connect();

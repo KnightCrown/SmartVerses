@@ -10,6 +10,7 @@ import {
   WsSlidesUpdate,
   LiveSlidesProPresenterActivationRule,
 } from "../types/liveSlides";
+import { Playlist } from "../types";
 
 // Storage key for settings
 const LIVE_SLIDES_SETTINGS_KEY = "proassist-live-slides-settings";
@@ -381,6 +382,10 @@ export interface MasterSlidesResponse {
   server_running: boolean;
 }
 
+export interface MasterPlaylistsResponse {
+  playlists: Playlist[];
+}
+
 export interface RemoteTranscriptionPinRequest {
   clientId: string;
   label?: string;
@@ -431,6 +436,44 @@ export async function fetchSlidesFromMaster(
     console.error("[LiveSlides] Failed to fetch from master:", error);
     throw error;
   }
+}
+
+/**
+ * Fetch all playlists (with slides) from a master server via HTTP JSON API.
+ */
+export async function fetchPlaylistsFromMaster(
+  masterHost: string,
+  masterPort: number
+): Promise<MasterPlaylistsResponse> {
+  const url = `http://${masterHost}:${masterPort}/api/playlists`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `Failed to fetch from master: ${response.status} ${response.statusText}${
+          text ? ` - ${text}` : ""
+        }`
+      );
+    }
+
+    const data = await response.json();
+    return data as MasterPlaylistsResponse;
+  } catch (error) {
+    console.error("[Playlists] Failed to fetch from master:", error);
+    throw error;
+  }
+}
+
+export async function updateApiPlaylists(playlists: Playlist[]): Promise<void> {
+  await invoke("update_api_playlists", { playlists });
 }
 
 export async function pinRemoteTranscriptionSource(
