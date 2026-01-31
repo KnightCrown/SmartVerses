@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "SmartVerses API v1",
+    "title": "SmartVerses API",
     "version": "1.0.0",
-    "description": "HTTP API for controlling Scripture Go Live and countdown timers. Enable it in Network Settings."
+    "description": "HTTP API for external control of SmartVerses. Enable it in Settings → Network → HTTP API."
   },
   "servers": [
     {
@@ -128,6 +128,7 @@
     "/api/live-slides": {
       "get": {
         "summary": "Get live slide sessions",
+        "description": "Returns all Live Slides sessions on this instance. Used for real-time slide sync.",
         "responses": {
           "200": {
             "description": "Live slide sessions",
@@ -142,6 +143,63 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/playlists": {
+      "get": {
+        "summary": "Get all playlists and slides",
+        "description": "Returns all playlists with their items and slides. Used by other instances for Import from Network. Requires API to be enabled (Settings → Network → HTTP API).",
+        "responses": {
+          "200": {
+            "description": "All playlists with items and slides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "playlists": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "name": { "type": "string" },
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": { "type": "string" },
+                                "title": { "type": "string" },
+                                "templateName": { "type": "string" },
+                                "slides": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": { "type": "string" },
+                                      "text": { "type": "string" },
+                                      "layout": { "type": "string" },
+                                      "order": { "type": "number" }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": ["playlists"]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API disabled. Enable HTTP API in Settings → Network."
           }
         }
       }
