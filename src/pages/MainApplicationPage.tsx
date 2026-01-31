@@ -47,6 +47,7 @@ import {
   upsertLiveSlideSession,
   generateShareableNotepadUrl,
   generateWebSocketUrl,
+  updateApiPlaylists,
 } from "../services/liveSlideService";
 import {
   LiveSlide,
@@ -520,6 +521,10 @@ const MainApplicationPage: React.FC = () => {
     } catch (err) {
       console.error("Failed to save playlists:", err);
     }
+
+    updateApiPlaylists(playlists).catch((error) => {
+      console.warn("[API] Failed to update master playlists:", error);
+    });
   }, [playlists]);
 
   // Persist selected playlist and item IDs to localStorage
@@ -2185,19 +2190,6 @@ const MainApplicationPage: React.FC = () => {
     };
   }, [templates]);
 
-  // Compute all existing live slides session IDs for import modal (to avoid duplicates)
-  const existingLiveSlidesSessionIds = useMemo(() => {
-    const sessionIds: string[] = [];
-    for (const p of playlists) {
-      for (const it of p.items) {
-        if (it.liveSlidesSessionId) {
-          sessionIds.push(it.liveSlidesSessionId);
-        }
-      }
-    }
-    return sessionIds;
-  }, [playlists]);
-
   // Check if we can load from master (network sync configured as slave/peer with remote host)
   const networkSyncSettingsForImport = loadNetworkSyncSettings();
   const canLoadFromMaster =
@@ -3532,7 +3524,6 @@ const MainApplicationPage: React.FC = () => {
         isOpen={isImportFromNetworkOpen}
         onClose={() => setIsImportFromNetworkOpen(false)}
         onImport={handleImportFromModal}
-        existingSessionIds={existingLiveSlidesSessionIds}
       />
       <ImportFromLiveSlidesModal
         isOpen={isLiveSlidesImportOpen}

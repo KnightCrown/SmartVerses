@@ -1477,37 +1477,22 @@ const NetworkSettings: React.FC = () => {
         <h3
           style={{
             marginTop: 0,
-            marginBottom: "var(--spacing-3)",
+            marginBottom: "var(--spacing-2)",
             fontSize: "1.25rem",
             fontWeight: 600,
           }}
         >
-          HTTP API (v1)
+          HTTP API
         </h3>
-        <div
+        <p
           style={{
-            marginBottom: "var(--spacing-4)",
-            padding: "var(--spacing-3)",
-            backgroundColor: "var(--app-input-bg-color)",
-            borderRadius: "8px",
-            border: "1px solid var(--app-border-color)",
+            margin: "0 0 var(--spacing-3) 0",
+            fontSize: "0.9em",
+            color: "var(--app-text-color-secondary)",
           }}
         >
-          <p style={{ margin: "0 0 var(--spacing-2) 0", fontWeight: 500 }}>
-            About the API
-          </p>
-          <p
-            style={{
-              margin: 0,
-              fontSize: "0.9em",
-              color: "var(--app-text-color-secondary)",
-            }}
-          >
-            The API lets external systems trigger Scripture Go Live and start
-            countdown timers. It runs on the Live Slides web server.
-          </p>
-        </div>
-
+          Allows external systems to control SmartVerses via HTTP API endpoints.
+        </p>
         <div
           style={{
             display: "flex",
