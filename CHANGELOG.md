@@ -2,6 +2,22 @@
 
 All notable changes to SmartVerses will be documented in this file.
 
+## [0.7.9] - 2026-02-01
+
+### Added
+- **Live Testimonies**: Dark green Live button; Copy Name styling matches Load blue
+
+### Fixed
+- **Transcript AI**: Removed `alert()` from transcript AI to avoid popups during live transcription
+- **AI error display**: Consolidated AI error message extraction into shared utility; improved error display and Groq defaults with recommended models
+- **Bible parsing**: Psalm/Psalms and Song Of Solomon parsing fixes; transcription and verse-load test improvements
+- **React hooks**: Fixed hooks order (move `useEffect` before early return) in Navigation
+
+### Changed
+- **Transcript paraphrase**: When using remote transcription, skip local AI; added live threshold and hide paraphrase settings when remote
+- **Timer page**: Fixed bottom spacing; restyled Auto Play and Allow Overrun; scrollable schedule and collapsible sections
+- **Stage Assist**: Header and timer UI refresh; trigger reset; timer bar hides on Timer tab
+
 ## [0.7.8] - 2026-01-31
 
 ### Added
