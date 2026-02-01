@@ -2585,6 +2585,26 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                   </div>
                 )}
 
+                {settings.enableParaphraseDetection &&
+                  (settings.paraphraseDetectionMode || "offline") !== "offline" && (
+                    <div style={fieldStyle}>
+                      <label style={checkboxLabelStyle}>
+                        <input
+                          type="checkbox"
+                          checked={settings.paraphraseStrictMode ?? false}
+                          onChange={(e) =>
+                            handleChange("paraphraseStrictMode", e.target.checked)
+                          }
+                        />
+                        Strict Paraphrase Mode (AI only)
+                      </label>
+                      <p style={helpTextStyle}>
+                        Only return paraphrased verses that clearly quote a specific scripture. Skip
+                        vague or thematic references.
+                      </p>
+                    </div>
+                  )}
+
                 <div style={fieldStyle}>
                   <label style={labelStyle}>Paraphrase Confidence Threshold</label>
                   <div
@@ -2723,6 +2743,23 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
           <p style={helpTextStyle}>
             Automatically add verses detected from transcription to the chat
             panel.
+          </p>
+        </div>
+
+        <div style={fieldStyle}>
+          <label style={checkboxLabelStyle}>
+            <input
+              type="checkbox"
+              checked={settings.autoAddDetectedParaphraseToHistory ?? true}
+              onChange={(e) =>
+                handleChange("autoAddDetectedParaphraseToHistory", e.target.checked)
+              }
+            />
+            Add Detected Paraphrased Verses to Search History
+          </label>
+          <p style={helpTextStyle}>
+            Automatically add paraphrased verses detected from transcription to the
+            chat panel.
           </p>
         </div>
 
