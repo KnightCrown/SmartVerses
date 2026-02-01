@@ -11,7 +11,7 @@ import {
   FaDesktop,
 } from "react-icons/fa";
 import "../App.css"; // Ensure global styles are applied
-import ContextMenu from "./ContextMenu"; // Import the new component
+import ContextMenu from "./ContextMenu";
 import TimerDropdown from "./TimerDropdown";
 import { useStageAssist } from "../contexts/StageAssistContext";
 import ActivatePresentationModal from "./ActivatePresentationModal";
@@ -49,13 +49,6 @@ interface SlideDisplayAreaProps {
   proofreadCorrectedSlideIds?: string[]; // IDs of slides that were corrected by AI proofreading
 }
 
-interface ContextMenuState {
-  isOpen: boolean;
-  x: number;
-  y: number;
-  slideId: string | null;
-}
-
 const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
   playlistItem,
   template,
@@ -86,12 +79,6 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
   // For simplicity, we'll manage lines directly.
   const [editingLines, setEditingLines] = useState<string[]>([]);
   const [liveSlideId, setLiveSlideId] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
-    isOpen: false,
-    x: 0,
-    y: 0,
-    slideId: null,
-  });
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchMode, setSearchMode] = useState<"first-line" | "all">(
     "first-line"
@@ -102,7 +89,6 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
   useEffect(() => {
     setEditingSlideId(null);
     setEditingLines([]);
-    setContextMenu({ isOpen: false, x: 0, y: 0, slideId: null }); // Close context menu on item change
   }, [playlistItem]);
 
   const getLayoutText = (layout: LayoutType): string => {
@@ -178,7 +164,6 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
         .fill("")
         .map((_, i) => currentLines[i] || "")
     );
-    closeContextMenu(); // Close context menu when edit starts
   };
 
   const handleEditingLineChange = (index: number, value: string) => {
@@ -233,15 +218,6 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
     setLiveSlideId(null);
   };
 
-  const handleRightClick = (event: React.MouseEvent, _slideId: string) => {
-    event.preventDefault();
-    // No context menu items for slides; prevent native menu only.
-  };
-
-  const closeContextMenu = () => {
-    setContextMenu({ isOpen: false, x: 0, y: 0, slideId: null });
-  };
-
   const isLiveLinked =
     !!playlistItem?.liveSlidesSessionId &&
     (playlistItem?.liveSlidesLinked ?? true);
@@ -256,8 +232,6 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
   ];
 
   // removed unused variable 'availableLayouts'
-
-  const contextMenuItems: { label?: string; onClick?: () => void }[] = [];
 
   // Simple text area styling, can be moved to CSS if not already there
   // Individual input styling can also be added to App.css
@@ -562,7 +536,7 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
             className={`slide-item-card ${
               liveSlideId === slide.id ? "live" : ""
             } ${slide.isAutoScripture ? "auto-scripture" : ""}`}
-            onContextMenu={(e) => handleRightClick(e, slide.id)}
+            onContextMenu={(e) => e.preventDefault()}
           >
             <div className="slide-layout-picker-container">
               <select
@@ -797,13 +771,6 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
           </div>
         </div>
       )}
-      <ContextMenu
-        isOpen={contextMenu.isOpen}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        menuItems={contextMenuItems}
-        onClose={closeContextMenu}
-      />
       {onChangeProPresenterActivation && activatePresentationModalSlideId && (
         <ActivatePresentationModal
           isOpen={!!activatePresentationModalSlideId}
@@ -821,6 +788,14 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
           title="Activate Presentation for This Slide"
         />
       )}
+      {/* ContextMenu kept for compatibility; slide context menu was removed in favor of playlist-item context menu */}
+      <ContextMenu
+        isOpen={false}
+        x={0}
+        y={0}
+        menuItems={[]}
+        onClose={() => {}}
+      />
     </div>
   );
 };

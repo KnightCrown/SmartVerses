@@ -167,38 +167,21 @@ const StageAssistPage: React.FC = () => {
     }
   };
 
-  const toggleCurrentSection = () => {
-    if (compactView) {
-      setCompactView(false);
-      setCurrentSectionCollapsed(false);
-    } else {
-      setCurrentSectionCollapsed((v) => !v);
-    }
-  };
-  const toggleCountdownTimer = () => {
-    if (compactView) {
-      setCompactView(false);
-      setCountdownTimerCollapsed(false);
-    } else {
-      setCountdownTimerCollapsed((v) => !v);
-    }
-  };
-  const toggleCountDownToTime = () => {
-    if (compactView) {
-      setCompactView(false);
-      setCountDownToTimeCollapsed(false);
-    } else {
-      setCountDownToTimeCollapsed((v) => !v);
-    }
-  };
-  const toggleFollowMasterSection = () => {
-    if (compactView) {
-      setCompactView(false);
-      setFollowMasterCollapsed(false);
-    } else {
-      setFollowMasterCollapsed((v) => !v);
-    }
-  };
+  const createSectionToggle = (
+    setCollapsed: React.Dispatch<React.SetStateAction<boolean>>
+  ): (() => void) =>
+    () => {
+      if (compactView) {
+        setCompactView(false);
+        setCollapsed(false);
+      } else {
+        setCollapsed((v) => !v);
+      }
+    };
+  const toggleCurrentSection = createSectionToggle(setCurrentSectionCollapsed);
+  const toggleCountdownTimer = createSectionToggle(setCountdownTimerCollapsed);
+  const toggleCountDownToTime = createSectionToggle(setCountDownToTimeCollapsed);
+  const toggleFollowMasterSection = createSectionToggle(setFollowMasterCollapsed);
 
   useEffect(() => {
     try {

@@ -23,9 +23,25 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   menuItems,
   onClose,
 }) => {
-  if (!isOpen || menuItems.length === 0) return null;
-
   const menuRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Handle click outside to close menu (must run unconditionally per Rules of Hooks)
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && menuRef.current.contains(event.target as Node)) {
+        return;
+      }
+      onClose();
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen || menuItems.length === 0) return null;
 
   const menuStyle: React.CSSProperties = {
     position: "fixed",
@@ -62,22 +78,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     color: "var(--app-text-color-secondary)",
     cursor: "not-allowed",
   };
-
-  // Handle click outside to close menu
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && menuRef.current.contains(event.target as Node)) {
-        return;
-      }
-      onClose();
-    };
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen, onClose]);
 
   return (
     <div ref={menuRef} style={menuStyle}>

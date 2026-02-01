@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useCallback, useState, useEffect, useMemo } from "react";
 import {
   Template,
   TemplateType,
@@ -19,7 +19,7 @@ import {
   DEFAULT_JAVASCRIPT_CODE,
   DEFAULT_REGEX_CODE,
 } from "../utils/templateDefaults";
-import { FaArrowLeft, FaDesktop, FaChevronDown, FaChevronRight } from "react-icons/fa";
+import { FaArrowLeft, FaDesktop, FaChevronDown, FaChevronRight, FaFolderOpen } from "react-icons/fa";
 import { loadProPresenterConnections } from "../services/propresenterService";
 import { ProPresenterActivationConfig } from "../types/propresenter";
 
@@ -278,6 +278,26 @@ const SettingsDetail: React.FC<SettingsDetailProps> = ({
         : [...prev, layout]
     );
   };
+
+  const handleOpenOutputFolder = useCallback(async () => {
+    try {
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      const { homeDir } = await import("@tauri-apps/api/path");
+      const { invoke } = await import("@tauri-apps/api/core");
+      let path = (outputPath || "").trim();
+      if (path.startsWith("~/")) {
+        const home = (await homeDir()) ?? "";
+        const base = path.slice(2);
+        path = home.endsWith("/") ? home + base : `${home}/${base}`;
+      }
+      if (!path) return;
+      if (!path.endsWith("/")) path += "/";
+      await invoke("ensure_output_folder", { path });
+      await openPath(path);
+    } catch (err) {
+      console.error("Failed to open output folder:", err);
+    }
+  }, [outputPath]);
 
   const renderLogicInput = () => {
     switch (processingType) {
@@ -610,7 +630,29 @@ const SettingsDetail: React.FC<SettingsDetailProps> = ({
           )}
 
           <div className="form-group">
-            <label htmlFor="template-output-path">Output Path:</label>
+            <label htmlFor="template-output-path" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              Output Path:
+              <button
+                type="button"
+                onClick={handleOpenOutputFolder}
+                title="Open this directory"
+                aria-label="Open this directory"
+                className="icon-button"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "4px",
+                  background: "none",
+                  border: "none",
+                  borderRadius: "4px",
+                  color: "var(--app-text-color-secondary)",
+                  cursor: "pointer",
+                }}
+              >
+                <FaFolderOpen style={{ fontSize: "0.9rem" }} />
+              </button>
+            </label>
             <input
               type="text"
               id="template-output-path"

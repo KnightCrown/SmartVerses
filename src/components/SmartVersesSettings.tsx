@@ -27,6 +27,7 @@ import {
   FaClock,
   FaBroadcastTower,
   FaBook,
+  FaFolderOpen,
 } from "react-icons/fa";
 import {
   SmartVersesSettings as SmartVersesSettingsType,
@@ -344,6 +345,45 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
       setTranslationsLoading(false);
     }
   }, []);
+
+  const handleOpenBiblesFolder = useCallback(async () => {
+    try {
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      const { homeDir } = await import("@tauri-apps/api/path");
+      const { invoke } = await import("@tauri-apps/api/core");
+      let path = "~/Documents/SmartVerses/Bibles".trim();
+      if (path.startsWith("~/")) {
+        const home = (await homeDir()) ?? "";
+        const base = path.slice(2);
+        path = home.endsWith("/") ? home + base : `${home}/${base}`;
+      }
+      if (!path.endsWith("/")) path += "/";
+      await invoke("ensure_output_folder", { path });
+      await openPath(path);
+    } catch (err) {
+      console.error("Failed to open Bibles folder:", err);
+    }
+  }, []);
+
+  const handleOpenBibleOutputFolder = useCallback(async () => {
+    try {
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      const { homeDir } = await import("@tauri-apps/api/path");
+      const { invoke } = await import("@tauri-apps/api/core");
+      let path = (settings.bibleOutputPath || "").trim();
+      if (path.startsWith("~/")) {
+        const home = (await homeDir()) ?? "";
+        const base = path.slice(2);
+        path = home.endsWith("/") ? home + base : `${home}/${base}`;
+      }
+      if (!path) return;
+      if (!path.endsWith("/")) path += "/";
+      await invoke("ensure_output_folder", { path });
+      await openPath(path);
+    } catch (err) {
+      console.error("Failed to open Bible output folder:", err);
+    }
+  }, [settings.bibleOutputPath]);
 
   useEffect(() => {
     const unsubscribe = subscribeOfflineModelPreload(setOfflineModelLoad);
@@ -2145,8 +2185,28 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
             >
               Get More Translations
             </button>
-            <span style={helpTextStyle}>
+            <span style={{ ...helpTextStyle, display: "flex", alignItems: "center", gap: "6px" }}>
               Reads `.svjson` files from ~/Documents/SmartVerses/Bibles
+              <button
+                type="button"
+                onClick={handleOpenBiblesFolder}
+                title="Open this directory"
+                aria-label="Open this directory"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "4px",
+                  background: "none",
+                  border: "none",
+                  borderRadius: "4px",
+                  color: "var(--app-text-color-secondary)",
+                  cursor: "pointer",
+                }}
+                className="icon-button"
+              >
+                <FaFolderOpen style={{ fontSize: "0.9rem" }} />
+              </button>
             </span>
           </div>
 
@@ -3015,8 +3075,28 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
             placeholder="/path/to/output/folder"
             style={inputStyle}
           />
-          <p style={helpTextStyle}>
+          <p style={{ ...helpTextStyle, display: "flex", alignItems: "center", gap: "6px" }}>
             Directory where verse text files will be saved.
+            <button
+              type="button"
+              onClick={handleOpenBibleOutputFolder}
+              title="Open this directory"
+              aria-label="Open this directory"
+              className="icon-button"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "4px",
+                background: "none",
+                border: "none",
+                borderRadius: "4px",
+                color: "var(--app-text-color-secondary)",
+                cursor: "pointer",
+              }}
+            >
+              <FaFolderOpen style={{ fontSize: "0.9rem" }} />
+            </button>
           </p>
         </div>
 

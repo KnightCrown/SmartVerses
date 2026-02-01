@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { FaDesktop, FaCheck, FaTimes, FaSpinner, FaDatabase, FaFolderOpen, FaUser, FaLink } from "react-icons/fa";
 import { FirebaseConfig, LiveTestimoniesSettings as LiveTestimoniesSettingsType, NameFormattingType, LiveTestimonyProPresenterConfig } from "../types/testimonies";
 import {
@@ -81,6 +81,26 @@ const LiveTestimoniesSettings: React.FC = () => {
   // ProPresenter connection selection
   const [enabledConnections, setEnabledConnections] = useState<ProPresenterConnection[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string>("");
+
+  const handleOpenOutputFolder = useCallback(async () => {
+    try {
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      const { homeDir } = await import("@tauri-apps/api/path");
+      const { invoke } = await import("@tauri-apps/api/core");
+      let path = (outputPath || "").trim();
+      if (path.startsWith("~/")) {
+        const home = (await homeDir()) ?? "";
+        const base = path.slice(2);
+        path = home.endsWith("/") ? home + base : `${home}/${base}`;
+      }
+      if (!path) return;
+      if (!path.endsWith("/")) path += "/";
+      await invoke("ensure_output_folder", { path });
+      await openPath(path);
+    } catch (err) {
+      console.error("Failed to open output folder:", err);
+    }
+  }, [outputPath]);
 
   useEffect(() => {
     const settings = loadLiveTestimoniesSettings();
@@ -489,8 +509,28 @@ const LiveTestimoniesSettings: React.FC = () => {
               placeholder="~/Documents/SmartVerses/Templates"
               style={{ width: "100%", padding: "var(--spacing-2)" }}
             />
-            <p style={{ marginTop: "var(--spacing-1)", fontSize: "0.85em", color: "var(--app-text-color-secondary)" }}>
+            <p style={{ marginTop: "var(--spacing-1)", fontSize: "0.85em", color: "var(--app-text-color-secondary)", display: "flex", alignItems: "center", gap: "6px" }}>
               Directory where the live testimony file will be saved
+              <button
+                type="button"
+                onClick={handleOpenOutputFolder}
+                title="Open this directory"
+                aria-label="Open this directory"
+                className="icon-button"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "4px",
+                  background: "none",
+                  border: "none",
+                  borderRadius: "4px",
+                  color: "var(--app-text-color-secondary)",
+                  cursor: "pointer",
+                }}
+              >
+                <FaFolderOpen style={{ fontSize: "0.9rem" }} />
+              </button>
             </p>
           </div>
 

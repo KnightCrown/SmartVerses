@@ -3577,29 +3577,11 @@ const MainApplicationPage: React.FC = () => {
         >
           {itemContextMenuTarget.slides.length > 0 && (
             <button
+              type="button"
+              className="context-menu-item-btn"
               onClick={() => {
                 closeItemContextMenu();
                 handleCopyToClipboardMain();
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                width: "100%",
-                padding: "10px 14px",
-                backgroundColor: "transparent",
-                color: "var(--app-text-color)",
-                border: "none",
-                borderBottom: "1px solid var(--app-border-color)",
-                cursor: "pointer",
-                fontSize: "0.875rem",
-                textAlign: "left",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "var(--app-hover-bg-color)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
               }}
             >
               <FaCopy style={{ opacity: 0.7 }} />
@@ -3607,57 +3589,22 @@ const MainApplicationPage: React.FC = () => {
             </button>
           )}
           <button
+            type="button"
+            className="context-menu-item-btn"
             onClick={() => {
               closeItemContextMenu();
               handleOpenRenameSelectedItem();
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              width: "100%",
-              padding: "10px 14px",
-              backgroundColor: "transparent",
-              color: "var(--app-text-color)",
-              border: "none",
-              borderBottom: "1px solid var(--app-border-color)",
-              cursor: "pointer",
-              fontSize: "0.875rem",
-              textAlign: "left",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "var(--app-hover-bg-color)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "transparent";
             }}
           >
             <FaEdit style={{ opacity: 0.7 }} />
             Edit name
           </button>
           <button
+            type="button"
+            className="context-menu-item-btn"
             onClick={() => {
               closeItemContextMenu();
               handleDeleteSelectedItem();
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              width: "100%",
-              padding: "10px 14px",
-              backgroundColor: "transparent",
-              color: "var(--app-text-color)",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "0.875rem",
-              textAlign: "left",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "var(--app-hover-bg-color)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "transparent";
             }}
           >
             <FaTrash style={{ opacity: 0.7 }} />

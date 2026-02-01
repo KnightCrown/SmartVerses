@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { FaDesktop, FaCheck, FaTimes, FaSpinner } from "react-icons/fa";
+import React, { useCallback, useEffect, useState } from "react";
+import { FaDesktop, FaCheck, FaTimes, FaSpinner, FaFolderOpen } from "react-icons/fa";
 import {
   loadLiveSlidesSettings,
   saveLiveSlidesSettings,
@@ -41,6 +41,26 @@ const LiveSlidesSettings: React.FC = () => {
   const [enabledConnections, setEnabledConnections] = useState<
     ProPresenterConnection[]
   >([]);
+
+  const handleOpenOutputFolder = useCallback(async () => {
+    try {
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      const { homeDir } = await import("@tauri-apps/api/path");
+      const { invoke } = await import("@tauri-apps/api/core");
+      let path = (settings.outputPath || "").trim();
+      if (path.startsWith("~/")) {
+        const home = (await homeDir()) ?? "";
+        const base = path.slice(2);
+        path = home.endsWith("/") ? home + base : `${home}/${base}`;
+      }
+      if (!path) return;
+      if (!path.endsWith("/")) path += "/";
+      await invoke("ensure_output_folder", { path });
+      await openPath(path);
+    } catch (err) {
+      console.error("Failed to open output folder:", err);
+    }
+  }, [settings.outputPath]);
 
   useEffect(() => {
     const loaded = loadLiveSlidesSettings();
@@ -272,9 +292,32 @@ const LiveSlidesSettings: React.FC = () => {
                   marginTop: "var(--spacing-1)",
                   fontSize: "0.85em",
                   color: "var(--app-text-color-secondary)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
                 }}
               >
                 Directory where live slide files will be written
+                <button
+                  type="button"
+                  onClick={handleOpenOutputFolder}
+                  title="Open this directory"
+                  aria-label="Open this directory"
+                  className="icon-button"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "4px",
+                    background: "none",
+                    border: "none",
+                    borderRadius: "4px",
+                    color: "var(--app-text-color-secondary)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <FaFolderOpen style={{ fontSize: "0.9rem" }} />
+                </button>
               </p>
             </div>
 

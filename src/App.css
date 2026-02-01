@@ -771,6 +771,28 @@ body.theme-light .list-item.playlist-item-selected:hover {
   );
 }
 
+/* Item context menu (playlist item right-click) button */
+.context-menu-item-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background-color: transparent;
+  color: var(--app-text-color);
+  border: none;
+  border-bottom: 1px solid var(--app-border-color);
+  cursor: pointer;
+  font-size: 0.875rem;
+  text-align: left;
+}
+.context-menu-item-btn:hover {
+  background-color: var(--app-hover-bg-color);
+}
+.context-menu-item-btn:last-of-type {
+  border-bottom: none;
+}
+
 .template-badge {
   padding: 2px 6px;
   border-radius: 10px; /* More rounded */
