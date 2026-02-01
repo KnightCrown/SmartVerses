@@ -431,11 +431,15 @@ const ImportModal: React.FC<ImportModalProps> = ({
           <button
             onClick={() => {
               setImportMethod("paste");
-              setCurrentInputText(pastedText);
               setFileName("");
               setPreviewSlides([]);
               setProcessedSlidesForImport([]);
-              void handlePasteFromClipboard();
+              // Only read from clipboard when the textarea is empty to avoid overwriting user-typed content
+              if (pastedText.trim() === "") {
+                void handlePasteFromClipboard();
+              } else {
+                setCurrentInputText(pastedText);
+              }
             }}
             className={importMethod === "paste" ? "active" : ""}
             style={{ marginRight: "10px" }}

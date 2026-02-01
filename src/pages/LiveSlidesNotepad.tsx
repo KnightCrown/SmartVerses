@@ -569,7 +569,7 @@ const LiveSlidesNotepad: React.FC = () => {
         transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
       });
     }
-  }, [hideLiveLockNotification]);
+  }, []);
 
   const handleDownloadTranscript = useCallback(
     async (format: "text" | "json") => {
@@ -768,7 +768,7 @@ const LiveSlidesNotepad: React.FC = () => {
       setShowLiveLockNotification(false);
       liveLockNotificationTimeoutRef.current = null;
     }, 4500);
-  }, []);
+  }, [hideLiveLockNotification]);
 
   // Update boundaries when text changes
   const handleTextChange = useCallback(
@@ -1416,7 +1416,7 @@ const LiveSlidesNotepad: React.FC = () => {
 
   const handleAddEmptyLine = useCallback(() => {
     const current = textRef.current;
-    const nextValue = current.endsWith("\n") ? `${current}\n` : `${current}\n`;
+    const nextValue = current.endsWith("\n") ? `${current}\n` : `${current}\n\n`;
     const nextPos = nextValue.length;
     applyTextUpdate(nextValue, nextPos, nextPos);
     textareaRef.current?.focus();
