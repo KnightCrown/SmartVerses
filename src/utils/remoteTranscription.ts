@@ -14,8 +14,8 @@ export function normalizeRemoteTranscriptionTarget(
     return { host, port };
   }
 
-  // Strip protocol and paths if a full URL was pasted.
-  host = host.replace(/^https?:\/\//i, "");
+  // Strip protocol and paths if a full URL was pasted (http, https, ws, wss).
+  host = host.replace(/^(https?|wss?):\/\//i, "");
   const slashIndex = host.indexOf("/");
   if (slashIndex !== -1) {
     host = host.slice(0, slashIndex);

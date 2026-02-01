@@ -878,12 +878,10 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
           next.remoteTranscriptionHost = syncSettings.remoteHost.trim();
         }
 
-        const defaultPort = DEFAULT_SMART_VERSES_SETTINGS.remoteTranscriptionPort;
-        const shouldDefaultPort =
-          !next.remoteTranscriptionPort ||
-          (next.remoteTranscriptionPort === defaultPort &&
-            webServerSettings.serverPort !== defaultPort);
-        if (shouldDefaultPort) {
+        // Only default the port when it was never set (falsy). Do not overwrite
+        // an explicit 9876: the user may have set it because the remote uses 9876.
+        const portSet = next.remoteTranscriptionPort != null && next.remoteTranscriptionPort !== 0;
+        if (!portSet) {
           next.remoteTranscriptionPort = webServerSettings.serverPort;
         }
 
@@ -1029,10 +1027,9 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
           ? err.message
           : "Failed to connect to remote transcription source.";
       const syncPort = loadNetworkSyncSettings().serverPort;
-      const webPort = loadLiveSlidesSettings().serverPort;
       const msg =
         port === syncPort
-          ? `Port ${port} is the Network Sync port. Use the Web Server port (default ${webPort}) for remote transcription.`
+          ? `Port ${port} is the Network Sync port. Use the Web Server port (default 9876) for remote transcription.`
           : `${rawMsg} Make sure the remote Web Server is running.`;
       setRemoteTranscriptionTestStatus("error");
       setRemoteTranscriptionTestMessage(msg);
