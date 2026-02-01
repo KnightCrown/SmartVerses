@@ -58,7 +58,8 @@ import { BUILTIN_KJV_ID, getAvailableTranslations, refreshBibleLibrary } from ".
 import { clearVersesCache } from "../services/bibleService";
 import { resetSearchIndexes } from "../services/bibleTextSearchService";
 import type { BibleTranslationSummary } from "../types/bible";
-import { pinRemoteTranscriptionSource } from "../services/liveSlideService";
+import { loadLiveSlidesSettings, pinRemoteTranscriptionSource } from "../services/liveSlideService";
+import { loadNetworkSyncSettings } from "../services/networkSyncService";
 import { getAssemblyAITemporaryToken } from "../services/assemblyaiTokenService";
 import {
   getEnabledConnections,
@@ -75,6 +76,7 @@ import { formatGroqModelLabel } from "../utils/groqModelLimits";
 import { useDebouncedEffect } from "../hooks/useDebouncedEffect";
 import { isDevModeEnabled } from "../utils/devFlags";
 import { sectionStyle, sectionHeaderStyle } from "../utils/settingsSectionStyles";
+import { normalizeRemoteTranscriptionTarget } from "../utils/remoteTranscription";
 import BibleConversionModal from "./BibleConversionModal";
 import "../App.css";
 
@@ -115,6 +117,7 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
   const [translationsError, setTranslationsError] = useState<string | null>(null);
   const [loadedTranslationsExpanded, setLoadedTranslationsExpanded] = useState(false);
   const [showBibleConversionModal, setShowBibleConversionModal] = useState(false);
+  const [showRemoteTranscriptionHelp, setShowRemoteTranscriptionHelp] = useState(false);
 
   // Offline model manager state
   const [showModelManager, setShowModelManager] = useState(false);
@@ -860,6 +863,35 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
     setSaveMessage(null);
   };
 
+  const handleRemoteTranscriptionToggle = useCallback(
+    (enabled: boolean) => {
+      setSettings((prev) => {
+        if (!enabled) {
+          return { ...prev, remoteTranscriptionEnabled: false };
+        }
+
+        const syncSettings = loadNetworkSyncSettings();
+        const webServerSettings = loadLiveSlidesSettings();
+        const next = { ...prev, remoteTranscriptionEnabled: true };
+
+        if (!(next.remoteTranscriptionHost || "").trim() && syncSettings.remoteHost?.trim()) {
+          next.remoteTranscriptionHost = syncSettings.remoteHost.trim();
+        }
+
+        // Only default the port when it was never set (falsy). Do not overwrite
+        // an explicit 9876: the user may have set it because the remote uses 9876.
+        const portSet = next.remoteTranscriptionPort != null && next.remoteTranscriptionPort !== 0;
+        if (!portSet) {
+          next.remoteTranscriptionPort = webServerSettings.serverPort;
+        }
+
+        return next;
+      });
+      setSaveMessage(null);
+    },
+    []
+  );
+
   const DEFAULT_TRANSCRIPT_FILTERS = ["[BLANK_AUDIO]", "[INAUDIBLE]"];
 
   const openTranscriptFilterDialog = () => {
@@ -968,8 +1000,10 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
   };
 
   const testRemoteTranscriptionConnection = useCallback(async () => {
-    const host = (settings.remoteTranscriptionHost || "").trim();
-    const port = settings.remoteTranscriptionPort || 9876;
+    const { host, port } = normalizeRemoteTranscriptionTarget(
+      settings.remoteTranscriptionHost || "",
+      settings.remoteTranscriptionPort
+    );
 
     if (!host) {
       setRemoteTranscriptionTestStatus("error");
@@ -988,10 +1022,15 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
       setRemoteTranscriptionTestStatus("success");
       setRemoteTranscriptionTestMessage("Connected and pinned.");
     } catch (err) {
-      const msg =
+      const rawMsg =
         err instanceof Error
           ? err.message
           : "Failed to connect to remote transcription source.";
+      const syncPort = loadNetworkSyncSettings().serverPort;
+      const msg =
+        port === syncPort
+          ? `Port ${port} is the Network Sync port. Use the Web Server port (default 9876) for remote transcription.`
+          : `${rawMsg} Make sure the remote Web Server is running.`;
       setRemoteTranscriptionTestStatus("error");
       setRemoteTranscriptionTestMessage(msg);
     }
@@ -1225,7 +1264,7 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
               type="checkbox"
               checked={settings.remoteTranscriptionEnabled || false}
               onChange={(e) =>
-                handleChange("remoteTranscriptionEnabled", e.target.checked)
+                handleRemoteTranscriptionToggle(e.target.checked)
               }
               style={{ display: "none" }}
             />
@@ -1260,7 +1299,7 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
           <p style={helpTextStyle}>
             Connect to another SmartVerses instance that is already capturing
             audio and streaming transcriptions. This will disable local mic
-            capture.
+            capture. The remote machine must have the Web Server running.
           </p>
           {isRemoteTranscription && (
             <div
@@ -1279,7 +1318,7 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                 placeholder="Remote host (e.g. 192.168.1.42)"
                 style={inputStyle}
               />
-              <div style={{ display: "flex", gap: "var(--spacing-2)" }}>
+              <div style={{ display: "flex", gap: "var(--spacing-2)", alignItems: "center" }}>
                 <input
                   type="number"
                   value={settings.remoteTranscriptionPort || 9876}
@@ -1289,9 +1328,18 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                       parseInt(e.target.value || "9876", 10)
                     )
                   }
-                  placeholder="Port"
+                  placeholder="Web server port from master"
                   style={{ ...inputStyle, flex: 1 }}
                 />
+                <span
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--app-text-color-secondary)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  (web server port from master)
+                </span>
                 <button
                   onClick={testRemoteTranscriptionConnection}
                   className="secondary"
@@ -1314,6 +1362,43 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                   )}
                 </button>
               </div>
+              <p style={helpTextStyle}>
+                Use the Web Server port from Network Settings (default 9876). The
+                Network Sync port (default 9877) will not work here.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowRemoteTranscriptionHelp((prev) => !prev)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--app-primary-color)",
+                  textDecoration: "underline",
+                  padding: 0,
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  width: "fit-content",
+                }}
+              >
+                {showRemoteTranscriptionHelp ? "Hide troubleshooting" : "Troubleshoot"}
+              </button>
+              {showRemoteTranscriptionHelp && (
+                <div
+                  style={{
+                    marginTop: "var(--spacing-2)",
+                    padding: "var(--spacing-3)",
+                    border: "1px solid var(--app-border-color)",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--app-bg-color)",
+                    fontSize: "0.85rem",
+                    color: "var(--app-text-color-secondary)",
+                  }}
+                >
+                  <div>Make sure the Web Server is running on the master.</div>
+                  <div>Make sure you are connected to that master IP.</div>
+                  <div>Use the master Web Server port (not the Sync port).</div>
+                </div>
+              )}
               {remoteTranscriptionTestStatus === "success" && (
                 <div
                   style={{
