@@ -117,11 +117,6 @@ function Navigation({
   const [isTimerBarDismissed, setIsTimerBarDismissed] = useState(false);
   const isTimerPage = location.pathname.startsWith("/stage-assist");
 
-  // Hide navigation on the notepad page for a cleaner experience
-  if (location.pathname.includes("/live-slides/notepad/")) {
-    return null;
-  }
-
   useEffect(() => {
     if (!timerState.isRunning) {
       setIsTimerBarDismissed(false);
@@ -131,6 +126,11 @@ function Navigation({
   useEffect(() => {
     setIsTimerBarDismissed(false);
   }, [timerState.sessionName]);
+
+  // Hide navigation on the notepad page for a cleaner experience
+  if (location.pathname.includes("/live-slides/notepad/")) {
+    return null;
+  }
 
   const isActive = (path: string) => {
     if (path === "/") {
