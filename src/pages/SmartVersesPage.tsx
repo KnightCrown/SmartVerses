@@ -74,6 +74,7 @@ import { LiveSlidesWebSocket, getLiveSlidesServerInfo } from "../services/liveSl
 import { getAssemblyAITemporaryToken } from "../services/assemblyaiTokenService";
 import { WsTranscriptionStatus, WsTranscriptionStream } from "../types/liveSlides";
 import { mapAudioLevel } from "../utils/audioMeter";
+import { normalizeRemoteTranscriptionTarget } from "../utils/remoteTranscription";
 import { saveTranscriptFile } from "../utils/transcriptDownload";
 import TranscriptOptionsMenu from "../components/transcription/TranscriptOptionsMenu";
 import type { BibleTranslationSummary } from "../types/bible";
@@ -2165,8 +2166,10 @@ const SmartVersesPage: React.FC = () => {
   }, []);
 
   const connectToRemoteTranscriptionWs = useCallback(async () => {
-    const host = (settings.remoteTranscriptionHost || "").trim();
-    const port = settings.remoteTranscriptionPort || 9876;
+    const { host, port } = normalizeRemoteTranscriptionTarget(
+      settings.remoteTranscriptionHost || "",
+      settings.remoteTranscriptionPort
+    );
     if (!host) {
       setTranscriptionStatus("error");
       setTranscriptionErrorMessage(
