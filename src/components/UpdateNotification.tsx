@@ -14,6 +14,8 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [showNotification, setShowNotification] = useState(true);
 
+  const CHANGELOG_URL = 'https://github.com/crownemmanuel/SmartVerses/blob/main/CHANGELOG.md';
+
   useEffect(() => {
     if (checkOnMount) {
       checkForUpdatesOnStartup().then(result => {
@@ -50,6 +52,16 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
     setShowNotification(false);
   };
 
+  const handleViewChangelog = async () => {
+    try {
+      const opener = await import("@tauri-apps/plugin-opener");
+      await opener.openUrl(CHANGELOG_URL);
+    } catch (error) {
+      console.warn("[UpdateNotification] Failed to open changelog via opener:", error);
+      window.open(CHANGELOG_URL, "_blank", "noopener,noreferrer");
+    }
+  };
+
   if (!updateAvailable || !showNotification) {
     return null;
   }
@@ -58,8 +70,8 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
     <div style={styles.overlay}>
       <div style={styles.notification}>
         <div style={styles.header}>
-          <span style={styles.icon}>🎉</span>
-          <h3 style={styles.title}>Update Available!</h3>
+          <span style={styles.icon}>⬆️</span>
+          <h3 style={styles.title}>Update Available</h3>
         </div>
         
         <p style={styles.version}>
@@ -69,6 +81,14 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
         {updateInfo?.body && (
           <p style={styles.body}>{updateInfo.body}</p>
         )}
+        
+        <button
+          onClick={handleViewChangelog}
+          style={styles.changelogLink}
+          type="button"
+        >
+          View changelog
+        </button>
         
         {isDownloading ? (
           <div style={styles.progressContainer}>
@@ -84,24 +104,29 @@ export const UpdateNotification: React.FC<UpdateNotificationProps> = ({
           </div>
         ) : (
           <div style={styles.buttons}>
-            <button 
-              onClick={handleUpdate} 
+            <button
+              onClick={handleUpdate}
               style={styles.updateButton}
+              type="button"
             >
-              Update Now
+              Update now
             </button>
-            <button 
-              onClick={handleDismiss} 
-              style={styles.dismissButton}
-            >
-              Later
-            </button>
-            <button 
-              onClick={handleSkipVersion} 
-              style={styles.skipButton}
-            >
-              Skip This Version
-            </button>
+            <div style={styles.secondaryRow}>
+              <button
+                onClick={handleDismiss}
+                style={styles.dismissButton}
+                type="button"
+              >
+                Later
+              </button>
+              <button
+                onClick={handleSkipVersion}
+                style={styles.skipButton}
+                type="button"
+              >
+                Skip this version
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -123,13 +148,13 @@ const styles: { [key: string]: React.CSSProperties } = {
     zIndex: 9999,
   },
   notification: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: '12px',
+    backgroundColor: '#121416',
+    borderRadius: '14px',
     padding: '24px',
-    maxWidth: '400px',
-    width: '90%',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-    border: '1px solid #2d2d44',
+    maxWidth: '420px',
+    width: '92%',
+    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.35)',
+    border: '1px solid #23262b',
   },
   header: {
     display: 'flex',
@@ -138,34 +163,50 @@ const styles: { [key: string]: React.CSSProperties } = {
     marginBottom: '16px',
   },
   icon: {
-    fontSize: '28px',
+    fontSize: '20px',
+    color: '#9aa4af',
   },
   title: {
     margin: 0,
     color: '#ffffff',
-    fontSize: '20px',
+    fontSize: '18px',
     fontWeight: 600,
   },
   version: {
-    color: '#a0a0b0',
+    color: '#b3bac3',
     fontSize: '14px',
     margin: '0 0 16px 0',
   },
   body: {
-    color: '#c0c0d0',
+    color: '#cfd6dd',
     fontSize: '14px',
-    margin: '0 0 20px 0',
+    margin: '0 0 12px 0',
     lineHeight: 1.5,
+  },
+  changelogLink: {
+    background: 'none',
+    border: 'none',
+    padding: 0,
+    color: '#8bb7ff',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    textAlign: 'left',
+    marginBottom: '18px',
   },
   buttons: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '10px',
+  },
+  secondaryRow: {
+    display: 'flex',
+    gap: '10px',
   },
   updateButton: {
     flex: 1,
     padding: '12px 24px',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#3b82f6',
     color: '#ffffff',
     border: 'none',
     borderRadius: '8px',
@@ -176,24 +217,24 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   dismissButton: {
     flex: 1,
-    padding: '12px 24px',
-    backgroundColor: 'transparent',
-    color: '#a0a0b0',
-    border: '1px solid #3d3d54',
+    padding: '10px 16px',
+    backgroundColor: '#1b1f24',
+    color: '#c4cbd3',
+    border: '1px solid #2a2f36',
     borderRadius: '8px',
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'all 0.2s',
   },
   skipButton: {
     flex: 1,
-    padding: '12px 24px',
+    padding: '10px 16px',
     backgroundColor: 'transparent',
-    color: '#8b5cf6',
-    border: '1px solid #6d28d9',
+    color: '#9aa4af',
+    border: '1px solid #2a2f36',
     borderRadius: '8px',
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'all 0.2s',
@@ -206,17 +247,17 @@ const styles: { [key: string]: React.CSSProperties } = {
   progressBar: {
     flex: 1,
     height: '8px',
-    backgroundColor: '#2d2d44',
+    backgroundColor: '#23262b',
     borderRadius: '4px',
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#3b82f6',
     transition: 'width 0.3s ease',
   },
   progressText: {
-    color: '#a0a0b0',
+    color: '#b3bac3',
     fontSize: '14px',
     fontWeight: 500,
     minWidth: '40px',

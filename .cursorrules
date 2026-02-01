@@ -49,6 +49,8 @@ git add src-tauri/tauri.conf.json package.json src/components/VersionSettings.ts
 git commit -m "version X.Y.Z release (with one or two short line of the changes eg introduced live transcription"
 git push origin main
 
+please never add a text like this Version bump to 0.7.7 to the changelog file you will have to git log and see the diff from the last tag grab all the commit message and come up with a reason bullected lest of items that changed
+
 # 2. Update CHANGELOG.md (REQUIRED)
 # Edit CHANGELOG.md, then:
 git add CHANGELOG.md

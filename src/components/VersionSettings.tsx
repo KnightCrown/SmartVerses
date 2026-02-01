@@ -154,8 +154,7 @@ const VersionSettings: React.FC = () => {
             disabled={isChecking || isDownloading}
             style={{
               ...styles.button,
-              backgroundColor: '#8b5cf6',
-              color: '#ffffff',
+              ...styles.primaryButton,
               ...(isChecking || isDownloading ? styles.buttonDisabled : {}),
             }}
           >
@@ -218,6 +217,7 @@ const VersionSettings: React.FC = () => {
                     onClick={handleUpdate}
                     style={{
                       ...styles.button,
+                      ...styles.primaryButton,
                       ...styles.updateButton,
                     }}
                   >
@@ -245,8 +245,7 @@ const VersionSettings: React.FC = () => {
             onClick={() => setDeveloperMode(true)}
             style={{
               ...styles.button,
-              backgroundColor: '#4b5563',
-              color: '#ffffff',
+              ...styles.secondaryButton,
             }}
           >
             Enable Developer Mode
@@ -255,8 +254,7 @@ const VersionSettings: React.FC = () => {
             onClick={handleOpenInspector}
             style={{
               ...styles.button,
-              backgroundColor: '#2563eb',
-              color: '#ffffff',
+              ...styles.secondaryButton,
             }}
             title="Shortcut: F12 (Windows/Linux) or Cmd+Opt+I (macOS)"
           >
@@ -269,8 +267,7 @@ const VersionSettings: React.FC = () => {
             }}
             style={{
               ...styles.button,
-              backgroundColor: '#8b5cf6',
-              color: '#ffffff',
+              ...styles.secondaryButton,
             }}
           >
             Open Onboarding Screen
@@ -321,7 +318,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontFamily: 'monospace',
   },
   newVersion: {
-    color: '#6366f1',
+    color: 'var(--app-primary-color)',
     fontFamily: 'monospace',
     fontWeight: 600,
   },
@@ -331,15 +328,22 @@ const styles: { [key: string]: React.CSSProperties } = {
   button: {
     padding: 'var(--spacing-2) var(--spacing-4)',
     borderRadius: '6px',
-    border: 'none',
+    border: '1px solid var(--app-border-color)',
     fontSize: '14px',
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'all 0.2s',
   },
-  updateButton: {
-    backgroundColor: '#6366f1',
+  primaryButton: {
+    backgroundColor: 'var(--app-primary-color)',
     color: '#ffffff',
+    borderColor: 'var(--app-primary-color)',
+  },
+  secondaryButton: {
+    backgroundColor: 'var(--app-button-bg-color)',
+    color: 'var(--app-button-text-color)',
+  },
+  updateButton: {
     width: '100%',
     marginTop: 'var(--spacing-4)',
   },
@@ -360,8 +364,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   updateAvailable: {
     padding: 'var(--spacing-4)',
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-    border: '1px solid rgba(99, 102, 241, 0.3)',
+    backgroundColor: 'var(--surface-2)',
+    border: '1px solid var(--border)',
     borderRadius: '8px',
   },
   updateHeader: {
@@ -376,7 +380,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   updateTitle: {
     fontSize: '16px',
     fontWeight: 600,
-    color: '#6366f1',
+    color: 'var(--accent)',
   },
   updateInfo: {
     marginBottom: 'var(--spacing-4)',
@@ -419,14 +423,14 @@ const styles: { [key: string]: React.CSSProperties } = {
   progressBar: {
     width: '100%',
     height: '8px',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'var(--surface)',
     borderRadius: '4px',
     overflow: 'hidden',
     marginBottom: 'var(--spacing-2)',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#6366f1',
+    backgroundColor: 'var(--accent)',
     transition: 'width 0.3s ease',
   },
   progressText: {
