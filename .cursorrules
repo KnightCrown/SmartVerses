@@ -16,6 +16,7 @@
    - Add a new section at the top with version number and date
    - Include Added/Changed/Fixed sections as appropriate
    - Commit the changelog update before tagging
+   - **See "Changelog requirements" below** — changelog entries must be descriptive, never generic version-bump lines
 
 2. **Run local build** - Always verify the build passes locally
 
@@ -49,8 +50,6 @@ git add src-tauri/tauri.conf.json package.json src/components/VersionSettings.ts
 git commit -m "version X.Y.Z release (with one or two short line of the changes eg introduced live transcription"
 git push origin main
 
-please never add a text like this Version bump to 0.7.7 to the changelog file you will have to git log and see the diff from the last tag grab all the commit message and come up with a reason bullected lest of items that changed
-
 # 2. Update CHANGELOG.md (REQUIRED)
 # Edit CHANGELOG.md, then:
 git add CHANGELOG.md
@@ -74,6 +73,25 @@ git tag -a vX.Y.Z -m "Release version X.Y.Z - Short description of changes"
 git push origin vX.Y.Z
 ```
 
+### Changelog requirements
+
+**NEVER** use a changelog entry that is only a version bump, e.g. "Version bump to 0.7.7" or "Bump to X.Y.Z". Every release must have a **descriptive** changelog.
+
+- **Required:** Summarize what actually changed in this release in bulleted form (Added / Changed / Fixed as appropriate).
+- **If the changes are not obvious:** Use the last released tag and derive the changelog from git:
+  1. Find the latest tag: `git describe --tags --abbrev=0` or list tags and pick the previous release.
+  2. List commits since that tag: `git log <last-tag>..HEAD --oneline` (or `..main` if you release from main).
+  3. Optionally inspect the diff: `git diff <last-tag>..HEAD` to see file-level changes.
+  4. From those commits and diffs, write **meaningful bullet points** describing user-visible or important changes (features, fixes, improvements), not raw commit messages or a single "bump to X.Y.Z" line.
+
+**Good changelog example:**
+- Added "View changelog" link in the update notification dialog.
+- Updated update notification and Version settings UI (colors, button styles, layout).
+- Clarified release rules: changelog must be descriptive; derive from git log when needed.
+
+**Bad changelog example (do not use):**
+- Version bump to 0.7.7
+
 **IMPORTANT**: After pushing the tag, the GitHub Actions workflow will automatically create the release. Do NOT create the release manually.
 
 ## If Build Fails After Tagging
@@ -89,7 +107,7 @@ If you already pushed a tag with build errors:
 ## Important Reminders
 
 - **NEVER create releases manually** - Only create tags, let CI/CD handle releases
-- **Never skip the changelog** - Users need to know what changed
+- **Never skip the changelog** - Users need to know what changed; never use only "Version bump to X.Y.Z" — use git log from last tag to write descriptive bullet points
 - **Never skip the local build** - CI will fail if build has errors
 - **Always update all version files** - Keep them in sync
 - **Test before release** - Verify the build works locally first
