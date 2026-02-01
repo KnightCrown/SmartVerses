@@ -2,6 +2,24 @@
 
 All notable changes to SmartVerses will be documented in this file.
 
+## [0.7.10] - 2026-02-01
+
+### Added
+- **SmartVerses Starring**: Star/unstar Bible references to save favorites; filter chat history to show only starred verses
+- **Add to Chat**: Add detected references directly to chat history from the detected references panel
+- **Strict Paraphrase Mode**: New AI-only setting for stricter paraphrase detection that only matches clear quotations, skipping vague thematic references
+- **Separate Paraphrase History Setting**: Independent control for auto-adding paraphrased verses to chat history (separate from direct references)
+
+### Fixed
+- **ImportModal Paste**: Fixed issue where clicking "Paste Text" would overwrite user-typed content; now only reads from clipboard when textarea is empty
+- **Live Slides Connection Status**: Improved connection status handling in Live Slides Notepad; properly clears live slide index on disconnect
+- **Live Lock Notification**: Added ability to hide live lock notification per session; notification state persists across page reloads
+
+### Changed
+- **SmartVerses Auto-scroll**: Improved auto-scroll behavior for both chat and detected references panels; pauses when user scrolls up, resumes when near bottom
+- **Go Live History**: Enhanced "Go Live" functionality to track whether triggered from chat history vs auto-detection; better history messages
+- **Live Slides Notepad**: Improved live slide index validation; clears invalid live slide index when slide boundaries change
+
 ## [0.7.9] - 2026-02-01
 
 ### Added
