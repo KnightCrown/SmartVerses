@@ -2,6 +2,21 @@
 
 All notable changes to SmartVerses will be documented in this file.
 
+## [0.7.8] - 2026-01-31
+
+### Added
+- **View changelog**: Update notification pop-up UI and add "View changelog" link
+
+### Fixed
+- **Video recording**: Fix video recording saving zero-byte files
+- **Remote transcription**: Strip `ws://` and `wss://` in remote transcription host normalization for correct connection handling
+
+### Changed
+- **Timer page**: Scrollable schedule, collapsible sections, compact view with persisted preference
+- **SmartVerses**: Scroll to bottom only when a new message is added, not on in-place updates
+- **Transcription**: Improved network transmission and connection handling for remote transcription
+- **UI**: Open-folder icons, playlist context menu, and layout fixes
+
 ## [0.7.7] - 2026-01-31
 
 ### Changed
