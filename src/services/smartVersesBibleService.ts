@@ -60,10 +60,10 @@ const BOOK_NAME_MAPPING: Record<string, string> = {
   Neh: "Nehemiah",
   Esth: "Esther",
   Job: "Job",
-  Ps: "Psalms",
+  Ps: "Psalm",
   Prov: "Proverbs",
   Eccl: "Ecclesiastes",
-  Song: "Song of Solomon",
+  Song: "Song Of Solomon",
   Isa: "Isaiah",
   Jer: "Jeremiah",
   Lam: "Lamentations",
@@ -235,6 +235,10 @@ const TRANSCRIPTION_ERRORS: Record<string, string> = {
   'the tronomy': 'Deuteronomy',
   // Single word corrections
   'axe': 'Acts',
+  'palsms': 'Psalm',
+  "sam's": 'Psalm',
+  'sams': 'Psalm',
+  'salms': 'Psalm',
   'revolutions': 'Revelation',
   'romance': 'Romans',
   'viticus': 'Leviticus',
@@ -296,6 +300,13 @@ function normalizeTranscriptionErrors(text: string): string {
 
 function normalizeLikelyBookHomophones(text: string): string {
   return text.replace(/\bdue\s+(?=chapter|ch\.?)/gi, "Joel ");
+}
+
+function normalizePsalmPlural(text: string): string {
+  return text.replace(
+    /\bPsalms\b(?=\s+(?:\d{1,3}|chapter|ch\.?|\d{1,3}:\d{1,3}))/gi,
+    "Psalm"
+  );
 }
 
 /**
@@ -476,6 +487,20 @@ function trimVerseListTail(raw: string): string {
   return (idx >= 0 ? raw.slice(0, idx) : raw).trim();
 }
 
+function splitVerseListTail(
+  raw: string
+): { listToken: string; trailingText: string } {
+  if (!raw) return { listToken: raw, trailingText: "" };
+  const stopRegex = new RegExp(`\\b(?:chapter|ch\\.?|${BOOKS_REGEX_FLEX})\\b`, "i");
+  const idx = raw.search(stopRegex);
+  if (idx < 0) {
+    return { listToken: raw.trim(), trailingText: "" };
+  }
+  const listToken = raw.slice(0, idx).trim();
+  const trailingText = raw.slice(idx).trim();
+  return { listToken, trailingText };
+}
+
 function extractVerseListToken(text: string): string | null {
   const match = text.match(/\b(?:verses?|vv?\.?|v|vs)\s+([^.;\n]{0,80})/i);
   if (!match) return null;
@@ -530,7 +555,10 @@ function preprocessBibleReference(reference: string): string {
   // Step 1e: Normalize likely homophone book mentions with explicit chapter cues
   normalized = normalizeLikelyBookHomophones(normalized);
 
-  // Step 1f: Remove stray slashes/backslashes before book names (e.g., "\Psalms 91:2")
+  // Step 1f: Normalize "Psalms" to "Psalm" to match verse index keys.
+  normalized = normalizePsalmPlural(normalized);
+
+  // Step 1g: Remove stray slashes/backslashes before book names (e.g., "\Psalms 91:2")
   normalized = normalized.replace(
     new RegExp(`[\\\\/]+(?=${BOOKS_REGEX_FLEX})`, "gi"),
     ""
@@ -639,10 +667,11 @@ function normalizeBookChapterVerseList(text: string): string {
   );
 
   return text.replace(regex, (match, book, chapter, verseList) => {
-    const ranges = parseVerseRangeList(trimVerseListTail(verseList));
+    const { listToken, trailingText } = splitVerseListTail(verseList);
+    const ranges = parseVerseRangeList(listToken);
     const formatted = formatVerseRanges(ranges);
     if (!formatted) return match;
-    return `${book} ${chapter}:${formatted}`;
+    return `${book} ${chapter}:${formatted}${trailingText ? ` ${trailingText}` : ""}`;
   });
 }
 
@@ -673,10 +702,11 @@ function normalizeBookChapterThenVerseLater(text: string): string {
     "gi"
   );
   return text.replace(regex, (match, book, chapter, _gap, verseList) => {
-    const ranges = parseVerseRangeList(trimVerseListTail(verseList));
+    const { listToken, trailingText } = splitVerseListTail(verseList);
+    const ranges = parseVerseRangeList(listToken);
     const formatted = formatVerseRanges(ranges);
     if (!formatted) return match;
-    return `${book} ${chapter}:${formatted}`;
+    return `${book} ${chapter}:${formatted}${trailingText ? ` ${trailingText}` : ""}`;
   });
 }
 

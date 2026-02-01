@@ -164,6 +164,7 @@ export async function analyzeTranscriptChunk(
     minParaphraseConfidence?: number;
     maxParaphraseResults?: number;
     minWords?: number;
+    previousChunks?: string[];
   }
 ): Promise<TranscriptAnalysisResult> {
   const debugAI =
@@ -269,8 +270,28 @@ ${keyPointInstructions}
     );
   }
   if (extractKeyPoints) {
-    rules.push(`- For key points, only extract genuinely quotable content (max 2 per chunk)`);
+    rules.push(
+      `- For key points, only extract genuinely quotable content from the current chunk (max 2 per chunk)`
+    );
+    rules.push(
+      `- Quotes should be edifying or encouraging statements a congregation would want to remember or write down`
+    );
+    rules.push(
+      `- Key points must be direct or lightly polished restatements of what was said (no new ideas or inferences)`
+    );
+    rules.push(
+      `- If the current chunk does not contain a quotable statement, return an empty keyPoints array`
+    );
+    rules.push(
+      `- Use category "quote" unless the current chunk explicitly states an action, principle, or encouragement`
+    );
   }
+  rules.push(
+    `- matchedPhrase must be an exact phrase from the current chunk; do not invent it`
+  );
+  rules.push(
+    `- Only return paraphrased verses when the current chunk clearly alludes to a specific verse or Bible story (names, events, or recognizable phrasing)`
+  );
   rules.push(`- If nothing is found, return empty arrays`);
   rules.push(`- Always use proper Bible reference format (e.g., "John 3:16", "Romans 8:28-30")`);
 
@@ -299,7 +320,22 @@ Return your response as valid JSON with this exact structure:
   ]
 }`;
 
-  const userPrompt = `Analyze this sermon transcript chunk:
+  const previousChunks = (options?.previousChunks || [])
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+
+  const previousContext =
+    previousChunks.length > 0
+      ? `Previous transcript chunks (already processed, for context only):
+
+${previousChunks.map((chunk, index) => `(${index + 1}) "${chunk}"`).join("\n\n")}
+
+Use the previous chunks only if they help interpret the current chunk. Only return verses or key points supported by the current chunk.
+
+`
+      : "";
+
+  const userPrompt = `${previousContext}Analyze this sermon transcript chunk:
 
 "${transcriptChunk}"
 
@@ -373,9 +409,7 @@ Return ONLY valid JSON, no other text.`;
     }
 
     console.error("Error analyzing transcript:", error);
-    if (typeof window !== "undefined" && !isRateLimit) {
-      alert(`AI analysis failed: ${errorMessage}`);
-    }
+    // Do not alert() here: this runs during live/remote transcription; popups would interrupt the user.
     return { paraphrasedVerses: [], keyPoints: [] };
   }
 }
@@ -524,9 +558,7 @@ RULES:
     }
 
     console.error("Error in AI Bible search:", error);
-    if (typeof window !== "undefined" && !isRateLimit) {
-      alert(`AI Bible search failed: ${errorMessage}`);
-    }
+    // Do not alert() here: search can be triggered from live transcription; popups would interrupt the user.
     return [];
   }
 }

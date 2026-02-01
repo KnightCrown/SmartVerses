@@ -284,6 +284,7 @@ export interface SmartVersesSettings {
   keyPointExtractionInstructions?: string;
   paraphraseConfidenceThreshold: number; // Default 0.6
   aiMinWordCount: number; // Default 6
+  aiContextChunkCount?: number; // How many previous chunks to include
   
   // Display settings
   autoAddDetectedToHistory: boolean; // Add detected refs from transcription to chat history
@@ -340,6 +341,7 @@ export const DEFAULT_SMART_VERSES_SETTINGS: SmartVersesSettings = {
     "Extract 1–2 concise, quotable key points suitable for slides/lower-thirds. Prefer short sentences, avoid filler, keep the original voice, and skip vague statements.",
   paraphraseConfidenceThreshold: 0.6,
   aiMinWordCount: 6,
+  aiContextChunkCount: 1,
   autoAddDetectedToHistory: true,
   highlightDirectReferences: true,
   highlightParaphrasedReferences: true,

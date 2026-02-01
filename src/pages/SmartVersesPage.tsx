@@ -305,6 +305,7 @@ const SmartVersesPage: React.FC = () => {
   const autoTriggerOnDetectionRef = useRef<boolean>(
     DEFAULT_SMART_VERSES_SETTINGS.autoTriggerOnDetection
   );
+  const settingsRef = useRef<SmartVersesSettings>(DEFAULT_SMART_VERSES_SETTINGS);
 
   // Chat state
   const [chatHistory, setChatHistory] = useState<SmartVersesChatMessage[]>([]);
@@ -357,6 +358,7 @@ const SmartVersesPage: React.FC = () => {
   const remoteTranscriptionWsRef = useRef<LiveSlidesWebSocket | null>(null);
   const remoteTranscriptionStatusUnsubRef = useRef<(() => void) | null>(null);
   const remoteRebroadcastAllowedRef = useRef<boolean>(true);
+  const aiContextChunksRef = useRef<string[]>([]);
   
   // Interim direct-reference parsing (fast local parser; avoids AI)
   const latestInterimTextRef = useRef<string>("");
@@ -695,6 +697,16 @@ const SmartVersesPage: React.FC = () => {
   useEffect(() => {
     autoTriggerOnDetectionRef.current = settings.autoTriggerOnDetection;
   }, [settings.autoTriggerOnDetection]);
+
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
+
+  useEffect(() => {
+    if ((settings.aiContextChunkCount ?? 0) <= 0) {
+      aiContextChunksRef.current = [];
+    }
+  }, [settings.aiContextChunkCount]);
 
   useEffect(() => {
     isStoppingRef.current = isStopping;
@@ -1730,6 +1742,7 @@ const SmartVersesPage: React.FC = () => {
       transcriptText: string,
       sourceLabel?: string
     ): DetectedBibleReference[] => {
+      const currentSettings = settingsRef.current;
       if (!resolvedRefs || resolvedRefs.length === 0) return [];
 
       const resolvedWithTranscript = resolvedRefs.map((r) => ({
@@ -1749,7 +1762,7 @@ const SmartVersesPage: React.FC = () => {
         setDetectedReferences((prev) => [...prev, ...deduped]);
       }
 
-      if (settings.autoAddDetectedToHistory && deduped.length > 0) {
+      if (currentSettings.autoAddDetectedToHistory && deduped.length > 0) {
         const confidence = Math.round((deduped[0].confidence || 0) * 100);
         const label = sourceLabel ? `${sourceLabel}, ` : "";
         setChatHistory((prev) => [
@@ -1764,14 +1777,28 @@ const SmartVersesPage: React.FC = () => {
         ]);
       }
 
-      if (settings.autoTriggerOnDetection && deduped.length > 0) {
+      if (currentSettings.autoTriggerOnDetection && deduped.length > 0) {
         handleGoLive(deduped[0], true);
       }
 
       return deduped;
     },
-    [handleGoLive, settings.autoAddDetectedToHistory, settings.autoTriggerOnDetection]
+    [handleGoLive]
   );
+
+  const updateAiContextChunks = useCallback((text: string, maxChunks: number) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (maxChunks <= 0) {
+      aiContextChunksRef.current = [];
+      return;
+    }
+    const next = [...aiContextChunksRef.current, trimmed];
+    if (next.length > maxChunks) {
+      next.splice(0, next.length - maxChunks);
+    }
+    aiContextChunksRef.current = next;
+  }, []);
 
   /**
    * Helper function to run paraphrase detection and key point extraction
@@ -1788,24 +1815,40 @@ const SmartVersesPage: React.FC = () => {
       keyPoints: KeyPoint[];
       paraphrasedVersesForWs: ParaphrasedVerse[];
     }> => {
+      const currentSettings = settingsRef.current;
       const activeTranslationId = translationId || transcriptionTranslationIdRef.current;
       const appSettings = loadAppSettings();
       let scriptureReferences: string[] = [];
       let keyPoints: KeyPoint[] = [];
       let paraphrasedVersesForWs: ParaphrasedVerse[] = [];
 
-      const paraphraseMode = settings.paraphraseDetectionMode || "offline";
+      const minWords = Math.max(1, Math.floor(currentSettings.aiMinWordCount ?? 1));
+      const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount < minWords) {
+        return { scriptureReferences, keyPoints, paraphrasedVersesForWs };
+      }
+
+      const paraphraseMode = currentSettings.paraphraseDetectionMode || "offline";
       const allowOfflineParaphrase =
-        settings.enableParaphraseDetection && paraphraseMode !== "ai";
+        currentSettings.enableParaphraseDetection && paraphraseMode !== "ai";
       const allowAIParaphrase =
-        settings.enableParaphraseDetection && paraphraseMode !== "offline";
+        currentSettings.enableParaphraseDetection && paraphraseMode !== "offline";
       let offlineParaphraseCount = 0;
+
+      const contextChunkCount = Math.max(
+        0,
+        Math.floor(currentSettings.aiContextChunkCount ?? 0)
+      );
+      const previousChunks =
+        contextChunkCount > 0
+          ? aiContextChunksRef.current.slice(-contextChunkCount)
+          : [];
 
       // Run offline paraphrase detection if enabled
       if (allowOfflineParaphrase) {
         try {
           const offlineAnalysis = await analyzeTranscriptChunkOffline(text, {
-            minConfidence: settings.paraphraseConfidenceThreshold,
+            minConfidence: currentSettings.paraphraseConfidenceThreshold,
             maxResults: 3,
             candidateLimit: 160,
           });
@@ -1841,7 +1884,7 @@ const SmartVersesPage: React.FC = () => {
 
       // Run AI analysis if needed (for key points or AI paraphrase detection)
       const shouldRunAI =
-        settings.enableKeyPointExtraction ||
+        currentSettings.enableKeyPointExtraction ||
         (allowAIParaphrase && offlineParaphraseCount === 0);
 
       if (shouldRunAI) {
@@ -1852,17 +1895,18 @@ const SmartVersesPage: React.FC = () => {
             text,
             appSettings,
             allowAIParaphrase && offlineParaphraseCount === 0,
-            settings.enableKeyPointExtraction,
+            currentSettings.enableKeyPointExtraction,
             {
-              keyPointInstructions: settings.keyPointExtractionInstructions,
+              keyPointInstructions: currentSettings.keyPointExtractionInstructions,
               overrideProvider:
-                settings.bibleSearchProvider === "offline"
+                currentSettings.bibleSearchProvider === "offline"
                   ? undefined
-                  : settings.bibleSearchProvider,
-              overrideModel: settings.bibleSearchModel,
-              minParaphraseConfidence: settings.paraphraseConfidenceThreshold,
+                  : currentSettings.bibleSearchProvider,
+              overrideModel: currentSettings.bibleSearchModel,
+              minParaphraseConfidence: currentSettings.paraphraseConfidenceThreshold,
               maxParaphraseResults: 3,
-              minWords: settings.aiMinWordCount,
+              minWords: currentSettings.aiMinWordCount,
+              previousChunks: previousChunks.length ? previousChunks : undefined,
             }
           );
 
@@ -1915,10 +1959,7 @@ const SmartVersesPage: React.FC = () => {
         paraphrasedVersesForWs,
       };
     },
-    [
-      settings,
-      applyParaphraseDetections,
-    ]
+    [applyParaphraseDetections]
   );
 
   useEffect(() => {
@@ -2299,6 +2340,7 @@ const SmartVersesPage: React.FC = () => {
           }
 
           (async () => {
+            const currentSettings = settingsRef.current;
             let scriptureReferences = m.scripture_references || [];
             let keyPoints: KeyPoint[] = (m.key_points as KeyPoint[]) || [];
             const paraphrasedVerses = m.paraphrased_verses || [];
@@ -2319,7 +2361,7 @@ const SmartVersesPage: React.FC = () => {
               if (resolvedDirect.length > 0) {
                 setDetectedReferences((prev) => [...prev, ...resolvedDirect]);
 
-                if (settings.autoAddDetectedToHistory) {
+              if (currentSettings.autoAddDetectedToHistory) {
                   setChatHistory((prev) => [
                     ...prev,
                     {
@@ -2361,11 +2403,17 @@ const SmartVersesPage: React.FC = () => {
             }
 
             if (
+              !currentSettings.remoteTranscriptionEnabled &&
               scriptureReferences.length === 0 &&
               paraphrasedVerses.length === 0 &&
-              (settings.enableParaphraseDetection || settings.enableKeyPointExtraction)
+              (currentSettings.enableParaphraseDetection || currentSettings.enableKeyPointExtraction)
             ) {
-              const result = await runParaphraseDetection(m.text, segment, "remote", transcriptionTranslationIdRef.current);
+              const result = await runParaphraseDetection(
+                m.text,
+                segment,
+                "remote",
+                transcriptionTranslationIdRef.current
+              );
               scriptureReferences = Array.from(
                 new Set([
                   ...scriptureReferences,
@@ -2377,7 +2425,7 @@ const SmartVersesPage: React.FC = () => {
 
             // Re-broadcast to local Live Slides server if enabled and safe.
             if (
-              settings.streamTranscriptionsToWebSocket &&
+              currentSettings.streamTranscriptionsToWebSocket &&
               remoteRebroadcastAllowedRef.current
             ) {
               const wsKeyPoints = keyPoints.length > 0
@@ -2388,7 +2436,7 @@ const SmartVersesPage: React.FC = () => {
                 type: "transcription_stream",
                 kind: m.kind,
                 timestamp: m.timestamp || Date.now(),
-                engine: m.engine || settings.transcriptionEngine,
+                engine: m.engine || currentSettings.transcriptionEngine,
                 text: m.text,
                 audio_level: m.audio_level ?? audioLevelRef.current,
                 segment: m.segment as TranscriptionSegment | undefined,
@@ -2438,6 +2486,7 @@ const SmartVersesPage: React.FC = () => {
     lastInterimDirectSignatureRef.current = "";
     lastInterimParseAtRef.current = 0;
     lastInterimWordCountRef.current = 0;
+    aiContextChunksRef.current = [];
 
     // Remote transcription uses an external source - skip local engine validation.
     if (settings.remoteTranscriptionEnabled) {
@@ -2572,6 +2621,7 @@ const SmartVersesPage: React.FC = () => {
           onFinalTranscript: async (text, segment) => {
             setTranscriptHistory(prev => [...prev, segment]);
             setInterimTranscript("");
+            const currentSettings = settingsRef.current;
 
             // Detect translation switches in the transcript (Phase 3)
             const cueTranslationId = await findTranslationCue(text);
@@ -2597,7 +2647,7 @@ const SmartVersesPage: React.FC = () => {
               );
               
               // Add to chat history if enabled
-              if (settings.autoAddDetectedToHistory) {
+              if (currentSettings.autoAddDetectedToHistory) {
                 setChatHistory(prev => [...prev, {
                   id: `transcript-${Date.now()}`,
                   type: "result",
@@ -2611,12 +2661,20 @@ const SmartVersesPage: React.FC = () => {
               if (autoTriggerOnDetectionRef.current && directRefs.length > 0) {
                 handleGoLive(directRefs[0], true);
               }
-            } else if (settings.enableParaphraseDetection || settings.enableKeyPointExtraction) {
+            } else if (
+              currentSettings.enableParaphraseDetection ||
+              currentSettings.enableKeyPointExtraction
+            ) {
               const result = await runParaphraseDetection(text, segment, "local", activeTranslationId);
               scriptureReferences = result.scriptureReferences;
               keyPoints = result.keyPoints;
               paraphrasedVersesForWs = result.paraphrasedVersesForWs;
             }
+
+            updateAiContextChunks(
+              text,
+              Math.max(0, Math.floor(currentSettings.aiContextChunkCount ?? 0))
+            );
 
             const wsKeyPoints =
               keyPoints.length > 0
@@ -2630,7 +2688,7 @@ const SmartVersesPage: React.FC = () => {
               type: "transcription_stream",
               kind: "final",
               timestamp: Date.now(),
-              engine: settings.transcriptionEngine,
+              engine: currentSettings.transcriptionEngine,
               text,
               audio_level: audioLevelRef.current,
               segment,
@@ -2643,12 +2701,12 @@ const SmartVersesPage: React.FC = () => {
                 : undefined,
             });
 
-            if (settings.streamTranscriptionsToWebSocket) {
+            if (currentSettings.streamTranscriptionsToWebSocket) {
               broadcastTranscriptionStreamMessage({
                 type: "transcription_stream",
                 kind: "final",
                 timestamp: Date.now(),
-                engine: settings.transcriptionEngine,
+                engine: currentSettings.transcriptionEngine,
                 text,
                 audio_level: audioLevelRef.current,
                 segment,
