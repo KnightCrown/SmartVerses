@@ -1105,11 +1105,12 @@ const StageAssistPage: React.FC = () => {
         display: "flex",
         flexDirection: "column",
         padding: "var(--spacing-4)",
-        minHeight: "calc(100vh - 51px)",
+        minHeight: 0,
         height: "100%",
         backgroundColor: "var(--app-bg-color)",
         color: "var(--app-text-color)",
-        overflow: "hidden",
+        overflow: "auto",
+        paddingBottom: "calc(var(--spacing-6) + 30px)",
       }}
     >
       {/* Header */}
@@ -2797,7 +2798,7 @@ const StageAssistPage: React.FC = () => {
           display: "flex",
           gap: "var(--spacing-3)",
           flexWrap: "wrap",
-          marginBottom: "var(--spacing-4)",
+          marginBottom: "48px",
         }}
       >
         <button
@@ -2805,18 +2806,25 @@ const StageAssistPage: React.FC = () => {
             setSettings((s) => ({ ...s, isAutoPlay: !s.isAutoPlay }))
           }
           style={{
-            padding: "var(--spacing-2) var(--spacing-4)",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 12px",
             backgroundColor: settings.isAutoPlay
-              ? "rgb(34, 197, 94)"
-              : "rgb(29, 78, 216)",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
+              ? "var(--app-primary-color)"
+              : "var(--app-button-bg-color)",
+            color: settings.isAutoPlay
+              ? "white"
+              : "var(--app-button-text-color)",
+            border: "1px solid var(--app-border-color)",
+            borderRadius: "6px",
             cursor: "pointer",
-            fontWeight: 600,
+            fontSize: "0.875rem",
+            fontWeight: 500,
           }}
+          title={settings.isAutoPlay ? "Auto Play is ON" : "Auto Play is OFF"}
         >
-          Auto Play: {settings.isAutoPlay ? "ON" : "OFF"}
+          <FaPlay style={{ fontSize: "0.85em" }} /> Auto Play: {settings.isAutoPlay ? "ON" : "OFF"}
         </button>
         <button
           onClick={() => {
@@ -2827,18 +2835,25 @@ const StageAssistPage: React.FC = () => {
             }));
           }}
           style={{
-            padding: "var(--spacing-2) var(--spacing-4)",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 12px",
             backgroundColor: settings.isAllowOverrun
-              ? "rgb(34, 197, 94)"
-              : "rgb(29, 78, 216)",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
+              ? "var(--app-primary-color)"
+              : "var(--app-button-bg-color)",
+            color: settings.isAllowOverrun
+              ? "white"
+              : "var(--app-button-text-color)",
+            border: "1px solid var(--app-border-color)",
+            borderRadius: "6px",
             cursor: "pointer",
-            fontWeight: 600,
+            fontSize: "0.875rem",
+            fontWeight: 500,
           }}
+          title={settings.isAllowOverrun ? "Allow Overrun is ON" : "Allow Overrun is OFF"}
         >
-          Allow Overrun: {settings.isAllowOverrun ? "ON" : "OFF"}
+          <FaClock style={{ fontSize: "0.85em" }} /> Allow Overrun: {settings.isAllowOverrun ? "ON" : "OFF"}
         </button>
         <div
           style={{
