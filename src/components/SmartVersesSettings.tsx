@@ -747,6 +747,22 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
     }
   }, [settings.bibleSearchProvider, loadBibleSearchModels]);
 
+  // Pre-populate Groq Bible Search model with Llama 3.1 8B when provider is Groq and model is empty
+  useEffect(() => {
+    if (
+      settings.bibleSearchProvider === "groq" &&
+      !settings.bibleSearchModel &&
+      bibleSearchModels.length > 0 &&
+      bibleSearchModels.includes("llama-3.1-8b-instant")
+    ) {
+      handleChange("bibleSearchModel", "llama-3.1-8b-instant");
+    }
+  }, [
+    settings.bibleSearchProvider,
+    settings.bibleSearchModel,
+    bibleSearchModels,
+  ]);
+
   const formatBibleSearchModelLabel = useCallback(
     (modelId: string) => {
       if (settings.bibleSearchProvider !== "groq") {
@@ -2394,11 +2410,13 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                 <select
                   value={settings.bibleSearchProvider || ""}
                   onChange={(e) => {
-                    handleChange(
-                      "bibleSearchProvider",
-                      e.target.value || undefined
-                    );
-                    handleChange("bibleSearchModel", ""); // Reset model when provider changes
+                    const newProvider = e.target.value || undefined;
+                    handleChange("bibleSearchProvider", newProvider);
+                    if (newProvider === "groq") {
+                      handleChange("bibleSearchModel", "llama-3.1-8b-instant");
+                    } else {
+                      handleChange("bibleSearchModel", "");
+                    }
                   }}
                   style={inputStyle}
                 >

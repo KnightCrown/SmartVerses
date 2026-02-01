@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState } from "react";
-import { AppSettings, AIProvider, AIProviderType, AIModelSetting } from "../types";
+import { AppSettings, AIProvider, AIProviderType, AIModelSetting, RECOMMENDED_DEFAULT_AI_MODEL, GROQ_FIRST_TIME_DEFAULTS } from "../types";
 import { getAppSettings, saveAppSettings } from "../utils/aiConfig";
 import { fetchOpenAIModels, fetchGeminiModels, fetchGroqModels } from "../services/aiService";
 import { formatGroqModelLabel } from "../utils/groqModelLimits";
@@ -132,24 +132,68 @@ const AISettingsForm: React.FC<AISettingsFormProps> = () => {
 
       // Merge against latest stored settings to avoid clobbering fields changed elsewhere.
       const base = getAppSettings();
+      const hasGroqOnly =
+        !!groqKeyInput &&
+        !openAIKeyInput &&
+        !geminiKeyInput;
+      const noProviderSelectedYet =
+        !base.defaultAIProvider &&
+        !base.spellCheckModel?.provider &&
+        !base.timerAssistantModel?.provider &&
+        !base.globalAssistantModel?.provider;
+
+      const applyFirstTimeGroqDefaults =
+        hasGroqOnly && noProviderSelectedYet;
+
+      let finalDefaultProvider = appSettings.defaultAIProvider || undefined;
+      let finalDefaultModel =
+        appSettings.defaultAIProvider ? defaultProviderModel || undefined : undefined;
+      let finalSpellCheck = spellCheckSetting;
+      let finalTimerAssistant = timerAssistantSetting;
+      let finalGlobalAssistant = globalAssistantSetting;
+
+      if (applyFirstTimeGroqDefaults) {
+        finalDefaultProvider = "groq";
+        finalDefaultModel = GROQ_FIRST_TIME_DEFAULTS.defaultModel;
+        finalSpellCheck = {
+          provider: "groq",
+          model: GROQ_FIRST_TIME_DEFAULTS.spellCheck,
+        };
+        finalTimerAssistant = {
+          provider: "groq",
+          model: GROQ_FIRST_TIME_DEFAULTS.timerImageUpload,
+        };
+        finalGlobalAssistant = {
+          provider: "groq",
+          model: GROQ_FIRST_TIME_DEFAULTS.globalAssistant,
+        };
+      }
+
       const newSettings: AppSettings = {
         ...base,
         ...appSettings,
         openAIConfig: openAIKeyInput ? { apiKey: openAIKeyInput } : undefined,
         geminiConfig: geminiKeyInput ? { apiKey: geminiKeyInput } : undefined,
         groqConfig: groqKeyInput ? { apiKey: groqKeyInput } : undefined,
-        defaultAIProvider: appSettings.defaultAIProvider || undefined,
-        defaultAIModel: appSettings.defaultAIProvider
-          ? defaultProviderModel || undefined
-          : undefined,
-        spellCheckModel: spellCheckSetting,
-        timerAssistantModel: timerAssistantSetting,
-        globalAssistantModel: globalAssistantSetting,
+        defaultAIProvider: finalDefaultProvider ?? null,
+        defaultAIModel: finalDefaultModel,
+        spellCheckModel: finalSpellCheck,
+        timerAssistantModel: finalTimerAssistant,
+        globalAssistantModel: finalGlobalAssistant,
       };
 
       try {
         saveAppSettings(newSettings);
         setAppSettings(newSettings);
+        if (applyFirstTimeGroqDefaults) {
+          setDefaultProviderModel(GROQ_FIRST_TIME_DEFAULTS.defaultModel);
+          setSpellCheckProvider("groq");
+          setSpellCheckModel(GROQ_FIRST_TIME_DEFAULTS.spellCheck);
+          setTimerAssistantProvider("groq");
+          setTimerAssistantModel(GROQ_FIRST_TIME_DEFAULTS.timerImageUpload);
+          setGlobalAssistantProvider("groq");
+          setGlobalAssistantModel(GROQ_FIRST_TIME_DEFAULTS.globalAssistant);
+        }
         setSaveStatus("All changes saved");
         setTimeout(() => setSaveStatus(null), 2000);
       } catch (err) {
@@ -174,7 +218,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = () => {
     { delayMs: 600, enabled: settingsLoaded, skipFirstRun: true }
   );
 
-  // Fetch models when default provider changes
+  // Fetch models when default provider changes; prepopulate recommended model when possible
   useEffect(() => {
     (async () => {
       const provider = appSettings.defaultAIProvider;
@@ -186,23 +230,42 @@ const AISettingsForm: React.FC<AISettingsFormProps> = () => {
 
       setDefaultProviderModelsLoading(true);
       try {
+        const recommended = RECOMMENDED_DEFAULT_AI_MODEL[provider];
         if (provider === "openai" && openAIKeyInput) {
           const models = await fetchOpenAIModels(openAIKeyInput);
           setDefaultProviderModels(models);
-          if (models.length > 0 && !models.includes(defaultProviderModel)) {
-            setDefaultProviderModel(models[0]);
+          if (models.length > 0) {
+            setDefaultProviderModel((current) =>
+              !current || !models.includes(current)
+                ? models.includes(recommended)
+                  ? recommended
+                  : models[0]
+                : current
+            );
           }
         } else if (provider === "gemini" && geminiKeyInput) {
           const models = await fetchGeminiModels(geminiKeyInput);
           setDefaultProviderModels(models);
-          if (models.length > 0 && !models.includes(defaultProviderModel)) {
-            setDefaultProviderModel(models[0]);
+          if (models.length > 0) {
+            setDefaultProviderModel((current) =>
+              !current || !models.includes(current)
+                ? models.includes(recommended)
+                  ? recommended
+                  : models[0]
+                : current
+            );
           }
         } else if (provider === "groq" && groqKeyInput) {
           const models = await fetchGroqModels(groqKeyInput);
           setDefaultProviderModels(models);
-          if (models.length > 0 && !models.includes(defaultProviderModel)) {
-            setDefaultProviderModel(models[0]);
+          if (models.length > 0) {
+            setDefaultProviderModel((current) =>
+              !current || !models.includes(current)
+                ? models.includes(recommended)
+                  ? recommended
+                  : models[0]
+                : current
+            );
           }
         } else {
           setDefaultProviderModels([]);
@@ -247,7 +310,8 @@ const AISettingsForm: React.FC<AISettingsFormProps> = () => {
           const models = await fetchGroqModels(groqKeyInput);
           setSpellCheckModels(models);
           if (models.length > 0 && !models.includes(spellCheckModel)) {
-            setSpellCheckModel(models[0]);
+            const defaultModel = GROQ_FIRST_TIME_DEFAULTS.spellCheck;
+            setSpellCheckModel(models.includes(defaultModel) ? defaultModel : models[0]);
           }
         } else {
           setSpellCheckModels([]);
@@ -286,7 +350,8 @@ const AISettingsForm: React.FC<AISettingsFormProps> = () => {
           const models = await fetchGroqModels(groqKeyInput);
           setTimerAssistantModels(models);
           if (models.length > 0 && !models.includes(timerAssistantModel)) {
-            setTimerAssistantModel(models[0]);
+            const defaultModel = GROQ_FIRST_TIME_DEFAULTS.timerImageUpload;
+            setTimerAssistantModel(models.includes(defaultModel) ? defaultModel : models[0]);
           }
         } else {
           setTimerAssistantModels([]);
@@ -325,7 +390,8 @@ const AISettingsForm: React.FC<AISettingsFormProps> = () => {
           const models = await fetchGroqModels(groqKeyInput);
           setGlobalAssistantModels(models);
           if (models.length > 0 && !models.includes(globalAssistantModel)) {
-            setGlobalAssistantModel(models[0]);
+            const defaultModel = GROQ_FIRST_TIME_DEFAULTS.globalAssistant;
+            setGlobalAssistantModel(models.includes(defaultModel) ? defaultModel : models[0]);
           }
         } else {
           setGlobalAssistantModels([]);
@@ -347,34 +413,41 @@ const AISettingsForm: React.FC<AISettingsFormProps> = () => {
       defaultAIProvider: provider,
     };
     setAppSettings(newSettings);
-    setDefaultProviderModel("");
     setDefaultProviderModels([]);
+    if (provider) {
+      setDefaultProviderModel(RECOMMENDED_DEFAULT_AI_MODEL[provider]);
+    } else {
+      setDefaultProviderModel("");
+    }
   };
 
   const handleSpellCheckProviderChange = (provider: AIProviderType | "") => {
     setSpellCheckProvider(provider);
-    // Model will be fetched and set by the useEffect
     if (!provider) {
       setSpellCheckModel("");
       setSpellCheckModels([]);
+    } else if (provider === "groq") {
+      setSpellCheckModel(GROQ_FIRST_TIME_DEFAULTS.spellCheck);
     }
   };
 
   const handleTimerAssistantProviderChange = (provider: AIProviderType | "") => {
     setTimerAssistantProvider(provider);
-    // Model will be fetched and set by the useEffect
     if (!provider) {
       setTimerAssistantModel("");
       setTimerAssistantModels([]);
+    } else if (provider === "groq") {
+      setTimerAssistantModel(GROQ_FIRST_TIME_DEFAULTS.timerImageUpload);
     }
   };
 
   const handleGlobalAssistantProviderChange = (provider: AIProviderType | "") => {
     setGlobalAssistantProvider(provider);
-    // Model will be fetched and set by the useEffect
     if (!provider) {
       setGlobalAssistantModel("");
       setGlobalAssistantModels([]);
+    } else if (provider === "groq") {
+      setGlobalAssistantModel(GROQ_FIRST_TIME_DEFAULTS.globalAssistant);
     }
   };
 
@@ -640,13 +713,20 @@ const AISettingsForm: React.FC<AISettingsFormProps> = () => {
               defaultProviderModels.length === 0 && (
                 <option value="">No models found</option>
               )}
-            {defaultProviderModels.map((model) => (
-              <option key={model} value={model}>
-                {appSettings.defaultAIProvider === "groq"
+            {defaultProviderModels.map((model) => {
+              const label =
+                appSettings.defaultAIProvider === "groq"
                   ? formatGroqModelLabel(model)
-                  : model}
-              </option>
-            ))}
+                  : model;
+              const provider = appSettings.defaultAIProvider;
+              const isRecommended =
+                provider && model === RECOMMENDED_DEFAULT_AI_MODEL[provider];
+              return (
+                <option key={model} value={model}>
+                  {label}{isRecommended ? " — Recommended" : ""}
+                </option>
+              );
+            })}
           </select>
           {defaultProviderModelsLoading && (
             <FaSpinner

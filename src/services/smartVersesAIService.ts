@@ -43,7 +43,19 @@ let groqRateLimitDetail = "";
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) {
+    const msg = error.message;
+    try {
+      const jsonMatch = msg.match(/\{[\s\S]*"error"[\s\S]*\}/);
+      if (jsonMatch) {
+        const obj = JSON.parse(jsonMatch[0]) as { error?: { message?: string } };
+        if (obj?.error?.message) return obj.error.message;
+      }
+    } catch {
+      /* ignore */
+    }
+    return msg;
+  }
   const nestedMessage =
     (error as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
       ?.message;
@@ -386,6 +398,9 @@ Return ONLY valid JSON, no other text.`;
     }
 
     console.error("Error analyzing transcript:", error);
+    if (typeof window !== "undefined" && !isRateLimit) {
+      alert(`AI analysis failed: ${errorMessage}`);
+    }
     return { paraphrasedVerses: [], keyPoints: [] };
   }
 }
@@ -534,6 +549,9 @@ RULES:
     }
 
     console.error("Error in AI Bible search:", error);
+    if (typeof window !== "undefined" && !isRateLimit) {
+      alert(`AI Bible search failed: ${errorMessage}`);
+    }
     return [];
   }
 }

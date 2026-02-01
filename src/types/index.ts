@@ -35,6 +35,21 @@ export const GROQ_MODELS = [
 ] as const;
 export type GroqModelType = (typeof GROQ_MODELS)[number];
 
+/** Recommended default AI model per provider (for templates and app default). */
+export const RECOMMENDED_DEFAULT_AI_MODEL: Record<AIProviderType, string> = {
+  openai: "gpt-4o-latest",
+  gemini: "gemini-1.5-flash-latest",
+  groq: "llama-3.3-70b-versatile",
+};
+
+/** Default Groq models for each AI Model Settings feature when Groq is the only provider (first-time setup). */
+export const GROQ_FIRST_TIME_DEFAULTS = {
+  defaultModel: "llama-3.3-70b-versatile" as const,
+  spellCheck: "llama-3.1-8b-instant" as const,
+  timerImageUpload: "meta-llama/llama-4-maverick-17b-128e-instruct" as const,
+  globalAssistant: "openai/gpt-oss-120b" as const,
+};
+
 /** Per-line metadata for Live Slides restore (bullet/numbered list formatting on the notepad). */
 export interface LiveSlidesItemMeta {
   isSubItem: boolean;

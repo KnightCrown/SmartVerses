@@ -11,6 +11,36 @@ interface AISlide {
 }
 
 /**
+ * Extract a user-facing error message from an AI/API error.
+ * Handles LangChain/OpenAI-style errors and Groq API JSON body (e.g. error.message, error.response.data).
+ */
+function getAIMessageFromError(error: unknown): string {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) {
+    const msg = error.message;
+    // Try to parse API JSON body embedded in message (e.g. Groq: {"error":{"message":"..."}})
+    try {
+      const jsonMatch = msg.match(/\{[\s\S]*"error"[\s\S]*\}/);
+      if (jsonMatch) {
+        const obj = JSON.parse(jsonMatch[0]) as { error?: { message?: string } };
+        if (obj?.error?.message) return obj.error.message;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return msg;
+  }
+  const obj = error as { response?: { data?: { error?: { message?: string } } }; error?: { message?: string } };
+  if (obj?.response?.data?.error?.message) return obj.response.data.error.message;
+  if (obj?.error?.message) return obj.error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+/**
  * Generates slides from input text using an AI model based on the selected template and app settings.
  *
  * @param inputText The raw text to be processed into slides.
@@ -105,12 +135,62 @@ export const generateSlidesFromText = async (
     }
   } catch (error) {
     console.error("Error initializing LLM:", error);
-    alert(
-      `Error initializing LLM: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+    alert(`Error initializing AI: ${getAIMessageFromError(error)}`);
     return [];
+  }
+
+  const systemPrompt = `You are an assistant that helps create presentation slides. Your goal is to take the user's raw text and their specific instructions, then break it down into well-structured slides.
+\nFor each slide, choose an appropriate layout from the provided list: ${template.availableLayouts.join(
+    ", "
+  )}.
+\nCrucially, the text provided for a slide MUST match the capacity of the chosen layout:
+- If you choose a 'one-line' layout, the text must contain exactly one line.
+- If you choose a 'two-line' layout, the text must contain exactly two lines separated by a single \\n.
+- If you choose a 'three-line' layout, the text must contain exactly three lines, each separated by \\n.
+- Continue this pattern for four-line through six-line.
+\nAdditional user instructions you must follow: "${userPrompt}".
+\nSTRICT OUTPUT REQUIREMENTS:
+- Return ONLY valid JSON (no prose, no backticks, no extra keys).
+- The JSON must be an object with a single key 'slides' whose value is an array.
+- Each array item must be an object: { "text": string, "layout": one of [${template.availableLayouts.join(
+    ", "
+  )} ] }.`;
+
+  const plainJsonSuffix =
+    "\nReturn ONLY valid JSON for { slides: { text: string, layout: string }[] } with no extra commentary.";
+  const plainSystemPrompt = systemPrompt + plainJsonSuffix;
+
+  const messages = [
+    new SystemMessage(systemPrompt),
+    new HumanMessage(inputText),
+  ];
+
+  /** Run the plain-JSON path (no tool/function calling). Used for Groq and as fallback. */
+  const runPlainJsonPath = async (): Promise<Pick<Slide, "text" | "layout">[]> => {
+    const plainRes: any = await (llm as any).invoke([
+      new SystemMessage(plainSystemPrompt),
+      new HumanMessage(inputText),
+    ]);
+    const rawContent = plainRes?.content;
+    const rawText =
+      typeof rawContent === "string" ? rawContent : rawContent?.[0]?.text ?? "";
+    const parsed = tryParseSlidesJson(rawText);
+    return parsed ?? [];
+  };
+
+  // Groq models do not support tool/function calling — use plain JSON prompt only.
+  if (provider === "groq") {
+    try {
+      console.log("Invoking Groq (plain JSON, no tool calling):", inputText?.slice(0, 80));
+      const slides = await runPlainJsonPath();
+      if (slides.length > 0) return slides;
+      alert("AI returned no valid slides. Try different text or check the model supports JSON output.");
+      return [];
+    } catch (error) {
+      console.error("Groq slide generation failed:", error);
+      alert(`AI error: ${getAIMessageFromError(error)}`);
+      return [];
+    }
   }
 
   const outputParser = new JsonOutputFunctionsParser<{ slides: AISlide[] }>();
@@ -153,28 +233,6 @@ export const generateSlidesFromText = async (
     })
     .pipe(outputParser);
 
-  const systemPrompt = `You are an assistant that helps create presentation slides. Your goal is to take the user's raw text and their specific instructions, then break it down into well-structured slides.
-\nFor each slide, choose an appropriate layout from the provided list: ${template.availableLayouts.join(
-    ", "
-  )}.
-\nCrucially, the text provided for a slide MUST match the capacity of the chosen layout:
-- If you choose a 'one-line' layout, the text must contain exactly one line.
-- If you choose a 'two-line' layout, the text must contain exactly two lines separated by a single \\n.
-- If you choose a 'three-line' layout, the text must contain exactly three lines, each separated by \\n.
-- Continue this pattern for four-line through six-line.
-\nAdditional user instructions you must follow: "${userPrompt}".
-\nSTRICT OUTPUT REQUIREMENTS:
-- Return ONLY valid JSON (no prose, no backticks, no extra keys).
-- The JSON must be an object with a single key 'slides' whose value is an array.
-- Each array item must be an object: { "text": string, "layout": one of [${template.availableLayouts.join(
-    ", "
-  )} ] }.`;
-
-  const messages = [
-    new SystemMessage(systemPrompt),
-    new HumanMessage(inputText),
-  ];
-
   try {
     console.log(
       "Invoking AI with prompt:",
@@ -196,61 +254,36 @@ export const generateSlidesFromText = async (
       }));
     }
 
-    // Fallback: try a plain text JSON response without function calling
+    // Fallback: try plain JSON response without function calling
     console.warn(
       "AI response did not match expected structure; attempting JSON fallback.",
       result
     );
-    const plainRes: any = await (llm as any).invoke([
-      new SystemMessage(
-        systemPrompt +
-          "\nReturn ONLY valid JSON for { slides: { text: string, layout: string }[] } with no extra commentary."
-      ),
-      new HumanMessage(inputText),
-    ]);
+    const slides = await runPlainJsonPath();
+    if (slides.length > 0) return slides;
 
-    const rawContent = (plainRes as any)?.content;
-    const rawText =
-      typeof rawContent === "string" ? rawContent : rawContent?.[0]?.text ?? "";
-
-    const parsed = tryParseSlidesJson(rawText);
-    if (parsed) {
-      return parsed;
-    }
-
-    console.error("Fallback JSON parse failed. Raw:", rawText);
+    console.error("Fallback JSON parse failed.");
     alert("AI response structure was unexpected. Check console for details.");
     return [];
   } catch (error) {
-    // As a last resort, attempt the same plain JSON prompt if function-call failed
     try {
       console.error(
         "Function-call path failed, trying plain JSON prompt:",
         error
       );
-      const plainRes: any = await (llm as any).invoke([
-        new SystemMessage(
-          systemPrompt +
-            "\nReturn ONLY valid JSON for { slides: { text: string, layout: string }[] } with no extra commentary."
-        ),
-        new HumanMessage(inputText),
-      ]);
-      const rawContent = (plainRes as any)?.content;
-      const rawText =
-        typeof rawContent === "string"
-          ? rawContent
-          : rawContent?.[0]?.text ?? "";
-      const parsed = tryParseSlidesJson(rawText);
-      if (parsed) return parsed;
-      console.error("Final fallback JSON parse failed. Raw:", rawText);
+      const slides = await runPlainJsonPath();
+      if (slides.length > 0) return slides;
+      console.error("Fallback JSON parse failed.");
       alert("AI processing failed and fallback parsing did not succeed.");
       return [];
     } catch (err2) {
       console.error("Plain JSON prompt also failed:", err2);
+      const firstMsg = getAIMessageFromError(error);
+      const secondMsg = getAIMessageFromError(err2);
       alert(
-        `Error from AI: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        secondMsg !== firstMsg
+          ? `AI error: ${firstMsg}. Retry failed: ${secondMsg}`
+          : `AI error: ${firstMsg}`
       );
       return [];
     }
