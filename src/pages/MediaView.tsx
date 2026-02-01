@@ -865,7 +865,7 @@ const MediaView: React.FC = () => {
                         cursor: "pointer",
                         backgroundColor: isCopied
                           ? "var(--success)"
-                          : "rgb(37, 99, 235)",
+                          : "var(--app-primary-color)",
                         color: "white",
                       }}
                     >
@@ -880,7 +880,7 @@ const MediaView: React.FC = () => {
                           borderRadius: "8px",
                           border: "none",
                           cursor: "pointer",
-                          backgroundColor: "rgb(147, 51, 234)",
+                          backgroundColor: "#166534",
                           color: "white",
                         }}
                       >
