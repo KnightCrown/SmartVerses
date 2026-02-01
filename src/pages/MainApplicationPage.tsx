@@ -126,6 +126,13 @@ const MainApplicationPage: React.FC = () => {
   >(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const [itemContextMenu, setItemContextMenu] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    itemId: string | null;
+  }>({ isOpen: false, x: 0, y: 0, itemId: null });
+  const itemContextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [showTranscriptionPanel, setShowTranscriptionPanel] = useState(false);
   const [isPlaylistCollapsed, setIsPlaylistCollapsed] = useState(false);
@@ -2236,6 +2243,38 @@ const MainApplicationPage: React.FC = () => {
     }
   }, [isMoreMenuOpen]);
 
+  const closeItemContextMenu = useCallback(() => {
+    setItemContextMenu({ isOpen: false, x: 0, y: 0, itemId: null });
+  }, []);
+
+  const openItemContextMenu = useCallback((itemId: string, x: number, y: number) => {
+    setItemContextMenu({ isOpen: true, x, y, itemId });
+  }, []);
+
+  useEffect(() => {
+    if (!itemContextMenu.isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        itemContextMenuRef.current &&
+        !itemContextMenuRef.current.contains(event.target as Node)
+      ) {
+        closeItemContextMenu();
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeItemContextMenu();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [itemContextMenu.isOpen, closeItemContextMenu]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -2487,6 +2526,9 @@ const MainApplicationPage: React.FC = () => {
   };
 
   const normalizedTranscriptQuery = transcriptSearchQuery.trim().toLowerCase();
+  const itemContextMenuTarget = itemContextMenu.itemId
+    ? currentPlaylist?.items.find((item) => item.id === itemContextMenu.itemId)
+    : null;
 
   return (
     <div style={pageLayoutStyle}>
@@ -2521,6 +2563,7 @@ const MainApplicationPage: React.FC = () => {
             onAddPlaylist={handleAddPlaylist}
             selectedItemId={selectedItemId}
             onSelectPlaylistItem={handleSelectPlaylistItem}
+            onOpenItemContextMenu={openItemContextMenu}
           />
         )}
       </div>
@@ -3514,6 +3557,59 @@ const MainApplicationPage: React.FC = () => {
 
             <div ref={transcriptEndRef} />
           </div>
+        </div>
+      )}
+      {itemContextMenu.isOpen && itemContextMenuTarget && (
+        <div
+          ref={itemContextMenuRef}
+          style={{
+            position: "fixed",
+            top: itemContextMenu.y,
+            left: itemContextMenu.x,
+            backgroundColor: "var(--app-bg-color)",
+            border: "1px solid var(--app-border-color)",
+            borderRadius: "8px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+            zIndex: 140,
+            minWidth: "200px",
+            overflow: "hidden",
+          }}
+        >
+          {itemContextMenuTarget.slides.length > 0 && (
+            <button
+              type="button"
+              className="context-menu-item-btn"
+              onClick={() => {
+                closeItemContextMenu();
+                handleCopyToClipboardMain();
+              }}
+            >
+              <FaCopy style={{ opacity: 0.7 }} />
+              Copy slides
+            </button>
+          )}
+          <button
+            type="button"
+            className="context-menu-item-btn"
+            onClick={() => {
+              closeItemContextMenu();
+              handleOpenRenameSelectedItem();
+            }}
+          >
+            <FaEdit style={{ opacity: 0.7 }} />
+            Edit name
+          </button>
+          <button
+            type="button"
+            className="context-menu-item-btn"
+            onClick={() => {
+              closeItemContextMenu();
+              handleDeleteSelectedItem();
+            }}
+          >
+            <FaTrash style={{ opacity: 0.7 }} />
+            Delete
+          </button>
         </div>
       )}
       <ImportModal

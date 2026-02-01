@@ -2,7 +2,7 @@
  * Screen: ProPresenter Setup - Link text boxes to files
  */
 
-import React from "react";
+import React, { useCallback } from "react";
 import {
   PROPRESENTER_REF_FILE,
   PROPRESENTER_TEMPLATE_DIR,
@@ -21,6 +21,25 @@ const ProPresenterLinkFilesScreen: React.FC<ProPresenterLinkFilesScreenProps> = 
   onBack,
   onSkip,
 }) => {
+  const handleOpenTemplatesFolder = useCallback(async () => {
+    try {
+      const { openPath } = await import("@tauri-apps/plugin-opener");
+      const { homeDir } = await import("@tauri-apps/api/path");
+      const { invoke } = await import("@tauri-apps/api/core");
+      let path = "~/Documents/SmartVerses/Templates".trim();
+      if (path.startsWith("~/")) {
+        const home = (await homeDir()) ?? "";
+        const base = path.slice(2);
+        path = home.endsWith("/") ? home + base : `${home}/${base}`;
+      }
+      if (!path.endsWith("/")) path += "/";
+      await invoke("ensure_output_folder", { path });
+      await openPath(path);
+    } catch (err) {
+      console.error("Failed to open Templates folder:", err);
+    }
+  }, []);
+
   return (
     <div className="onboarding-screen">
       <div className="onboarding-split">
@@ -59,6 +78,15 @@ const ProPresenterLinkFilesScreen: React.FC<ProPresenterLinkFilesScreenProps> = 
               </code>
             </p>
           </div>
+
+          <button
+            type="button"
+            onClick={handleOpenTemplatesFolder}
+            className="onboarding-button onboarding-button-secondary"
+            style={{ alignSelf: "flex-start", marginBottom: "1rem" }}
+          >
+            Open Directory
+          </button>
 
           <div className="onboarding-buttons">
             <button
