@@ -2531,135 +2531,152 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
               Transcription AI
             </h4>
 
-            <div style={fieldStyle}>
-              <label style={checkboxLabelStyle}>
-                <input
-                  type="checkbox"
-                  checked={settings.enableParaphraseDetection}
-                  onChange={(e) =>
-                    handleChange("enableParaphraseDetection", e.target.checked)
-                  }
-                />
-                Enable Paraphrase Detection
-              </label>
-              <p style={helpTextStyle}>
-                Detect when speakers paraphrase Bible verses without quoting them
-                directly.
-              </p>
-            </div>
-
-            {settings.enableParaphraseDetection && (
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Paraphrase Detection Mode</label>
-                <select
-                  value={settings.paraphraseDetectionMode || "offline"}
-                  onChange={(e) =>
-                    handleChange("paraphraseDetectionMode", e.target.value)
-                  }
-                  style={inputStyle}
-                >
-                  <option value="offline">Offline Search (Experimental)</option>
-                  <option value="ai">{getParaphraseAIOptionLabel()}</option>
-                </select>
-                <p style={helpTextStyle}>
-                  Offline Search (Experimental) uses local matching. AI Search uses the provider and
-                  model selected above. Key point extraction still requires AI. For
-                  best offline accuracy, download the embedding model in Manage
-                  Models.
-                </p>
-              </div>
-            )}
-
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Paraphrase Confidence Threshold</label>
+            {isRemoteTranscription ? (
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--spacing-3)",
+                  padding: "var(--spacing-3)",
+                  borderRadius: "8px",
+                  border: "1px solid var(--app-border-color)",
+                  backgroundColor: "var(--app-input-bg-color)",
                 }}
               >
-                <input
-                  type="range"
-                  min="0.3"
-                  max="0.9"
-                  step="0.1"
-                  value={settings.paraphraseConfidenceThreshold}
-                  onChange={(e) =>
-                    handleChange(
-                      "paraphraseConfidenceThreshold",
-                      parseFloat(e.target.value)
-                    )
-                  }
-                  style={{ flex: 1 }}
-                />
-                <span style={{ minWidth: "50px", textAlign: "right" }}>
-                  {Math.round(settings.paraphraseConfidenceThreshold * 100)}%
-                </span>
-              </div>
-              <p style={helpTextStyle}>
-                Only show paraphrased verses with confidence above this threshold.
-              </p>
-            </div>
-
-            <div style={fieldStyle}>
-              <label style={checkboxLabelStyle}>
-                <input
-                  type="checkbox"
-                  checked={settings.enableKeyPointExtraction}
-                  onChange={(e) =>
-                    handleChange("enableKeyPointExtraction", e.target.checked)
-                  }
-                />
-                Enable Key Point Extraction
-              </label>
-              <p style={helpTextStyle}>
-                Extract quotable key points from sermons (requires AI).
-              </p>
-            </div>
-
-            {settings.enableKeyPointExtraction && (
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Key Point Extraction Instructions</label>
-                <textarea
-                  value={settings.keyPointExtractionInstructions || ""}
-                  onChange={(e) =>
-                    handleChange("keyPointExtractionInstructions", e.target.value)
-                  }
-                  placeholder="Optional: Customize how key points should be extracted for your church/pastor..."
-                  style={{
-                    ...inputStyle,
-                    minHeight: "110px",
-                    fontFamily: "inherit",
-                    resize: "vertical",
-                  }}
-                />
-                <p style={helpTextStyle}>
-                  These instructions are added to the AI prompt when key point
-                  extraction is enabled. Leave blank to use the default behavior.
+                <p style={{ ...helpTextStyle, margin: 0 }}>
+                  Remote transcription is enabled. Paraphrase detection, key point extraction, and
+                  confidence settings are controlled by the master instance.
                 </p>
               </div>
-            )}
+            ) : (
+              <>
+                <div style={fieldStyle}>
+                  <label style={checkboxLabelStyle}>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableParaphraseDetection}
+                      onChange={(e) =>
+                        handleChange("enableParaphraseDetection", e.target.checked)
+                      }
+                    />
+                    Enable Paraphrase Detection
+                  </label>
+                  <p style={helpTextStyle}>
+                    Detect when speakers paraphrase Bible verses without quoting them
+                    directly.
+                  </p>
+                </div>
 
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Minimum Words for AI Analysis</label>
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={settings.aiMinWordCount}
-                onChange={(e) =>
-                  handleChange(
-                    "aiMinWordCount",
-                    Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1))
-                  )
-                }
-                style={inputStyle}
-              />
-              <p style={helpTextStyle}>
-                Skip AI requests for short phrases like "thank you".
-              </p>
-            </div>
+                {settings.enableParaphraseDetection && (
+                  <div style={fieldStyle}>
+                    <label style={labelStyle}>Paraphrase Detection Mode</label>
+                    <select
+                      value={settings.paraphraseDetectionMode || "offline"}
+                      onChange={(e) =>
+                        handleChange("paraphraseDetectionMode", e.target.value)
+                      }
+                      style={inputStyle}
+                    >
+                      <option value="offline">Offline Search (Experimental)</option>
+                      <option value="ai">{getParaphraseAIOptionLabel()}</option>
+                    </select>
+                    <p style={helpTextStyle}>
+                      Offline Search (Experimental) uses local matching. AI Search uses the provider
+                      and model selected above. Key point extraction still requires AI. For best
+                      offline accuracy, download the embedding model in Manage Models.
+                    </p>
+                  </div>
+                )}
+
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Paraphrase Confidence Threshold</label>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "var(--spacing-3)",
+                    }}
+                  >
+                    <input
+                      type="range"
+                      min="0.3"
+                      max="0.9"
+                      step="0.1"
+                      value={settings.paraphraseConfidenceThreshold}
+                      onChange={(e) =>
+                        handleChange(
+                          "paraphraseConfidenceThreshold",
+                          parseFloat(e.target.value)
+                        )
+                      }
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ minWidth: "50px", textAlign: "right" }}>
+                      {Math.round(settings.paraphraseConfidenceThreshold * 100)}%
+                    </span>
+                  </div>
+                  <p style={helpTextStyle}>
+                    Only show paraphrased verses with confidence above this threshold.
+                  </p>
+                </div>
+
+                <div style={fieldStyle}>
+                  <label style={checkboxLabelStyle}>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableKeyPointExtraction}
+                      onChange={(e) =>
+                        handleChange("enableKeyPointExtraction", e.target.checked)
+                      }
+                    />
+                    Enable Key Point Extraction
+                  </label>
+                  <p style={helpTextStyle}>
+                    Extract quotable key points from sermons (requires AI).
+                  </p>
+                </div>
+
+                {settings.enableKeyPointExtraction && (
+                  <div style={fieldStyle}>
+                    <label style={labelStyle}>Key Point Extraction Instructions</label>
+                    <textarea
+                      value={settings.keyPointExtractionInstructions || ""}
+                      onChange={(e) =>
+                        handleChange("keyPointExtractionInstructions", e.target.value)
+                      }
+                      placeholder="Optional: Customize how key points should be extracted for your church/pastor..."
+                      style={{
+                        ...inputStyle,
+                        minHeight: "110px",
+                        fontFamily: "inherit",
+                        resize: "vertical",
+                      }}
+                    />
+                    <p style={helpTextStyle}>
+                      These instructions are added to the AI prompt when key point
+                      extraction is enabled. Leave blank to use the default behavior.
+                    </p>
+                  </div>
+                )}
+
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Minimum Words for AI Analysis</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={settings.aiMinWordCount}
+                    onChange={(e) =>
+                      handleChange(
+                        "aiMinWordCount",
+                        Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1))
+                      )
+                    }
+                    style={inputStyle}
+                  />
+                  <p style={helpTextStyle}>
+                    Skip AI requests for short phrases like "thank you".
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
