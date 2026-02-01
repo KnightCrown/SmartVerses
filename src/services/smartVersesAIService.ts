@@ -434,9 +434,7 @@ Return ONLY valid JSON, no other text.`;
     }
 
     console.error("Error analyzing transcript:", error);
-    if (typeof window !== "undefined" && !isRateLimit) {
-      alert(`AI analysis failed: ${errorMessage}`);
-    }
+    // Do not alert() here: this runs during live/remote transcription; popups would interrupt the user.
     return { paraphrasedVerses: [], keyPoints: [] };
   }
 }
@@ -585,9 +583,7 @@ RULES:
     }
 
     console.error("Error in AI Bible search:", error);
-    if (typeof window !== "undefined" && !isRateLimit) {
-      alert(`AI Bible search failed: ${errorMessage}`);
-    }
+    // Do not alert() here: search can be triggered from live transcription; popups would interrupt the user.
     return [];
   }
 }
