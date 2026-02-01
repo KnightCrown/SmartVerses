@@ -14,6 +14,7 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatGroq } from "@langchain/groq";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { AppSettings, AIProviderType } from "../types";
+import { getAIMessageFromError } from "../utils/aiError";
 import {
   ParaphrasedVerse,
   TranscriptAnalysisResult,
@@ -40,32 +41,6 @@ const GROQ_RATE_LIMIT_EVENT = "ai-rate-limit";
 let groqRateLimitUntil = 0;
 let groqRateLimitMessage = "";
 let groqRateLimitDetail = "";
-
-function getErrorMessage(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) {
-    const msg = error.message;
-    try {
-      const jsonMatch = msg.match(/\{[\s\S]*"error"[\s\S]*\}/);
-      if (jsonMatch) {
-        const obj = JSON.parse(jsonMatch[0]) as { error?: { message?: string } };
-        if (obj?.error?.message) return obj.error.message;
-      }
-    } catch {
-      /* ignore */
-    }
-    return msg;
-  }
-  const nestedMessage =
-    (error as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
-      ?.message;
-  if (nestedMessage) return nestedMessage;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-}
 
 function extractRetryAfterMs(message: string): number | null {
   const match = message.match(/try again in (?:(\d+)m)?(\d+(?:\.\d+)?)s/i);
@@ -386,7 +361,7 @@ Return ONLY valid JSON, no other text.`;
     console.error("Failed to parse AI response:", rawText);
     return { paraphrasedVerses: [], keyPoints: [] };
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
+    const errorMessage = getAIMessageFromError(error);
     const isRateLimit =
       /rate limit/i.test(errorMessage) ||
       /rate_limit_exceeded/i.test(errorMessage) ||
@@ -537,7 +512,7 @@ RULES:
     console.error("Failed to parse AI search response:", rawText);
     return [];
   } catch (error) {
-    const errorMessage = getErrorMessage(error);
+    const errorMessage = getAIMessageFromError(error);
     const isRateLimit =
       /rate limit/i.test(errorMessage) ||
       /rate_limit_exceeded/i.test(errorMessage) ||
