@@ -46,7 +46,7 @@
 ```bash
 # 1. Update version numbers
 git add src-tauri/tauri.conf.json package.json src/components/VersionSettings.tsx
-git commit -m "Bump version to X.Y.Z"
+git commit -m "version X.Y.Z release (with one or two short line of the changes eg introduced live transcription"
 git push origin main
 
 # 2. Update CHANGELOG.md (REQUIRED)
