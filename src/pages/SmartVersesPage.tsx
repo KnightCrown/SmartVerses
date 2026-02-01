@@ -358,6 +358,7 @@ const SmartVersesPage: React.FC = () => {
   const remoteTranscriptionWsRef = useRef<LiveSlidesWebSocket | null>(null);
   const remoteTranscriptionStatusUnsubRef = useRef<(() => void) | null>(null);
   const remoteRebroadcastAllowedRef = useRef<boolean>(true);
+  const aiContextChunksRef = useRef<string[]>([]);
   
   // Interim direct-reference parsing (fast local parser; avoids AI)
   const latestInterimTextRef = useRef<string>("");
@@ -700,6 +701,12 @@ const SmartVersesPage: React.FC = () => {
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
+
+  useEffect(() => {
+    if ((settings.aiContextChunkCount ?? 0) <= 0) {
+      aiContextChunksRef.current = [];
+    }
+  }, [settings.aiContextChunkCount]);
 
   useEffect(() => {
     isStoppingRef.current = isStopping;
@@ -1779,6 +1786,20 @@ const SmartVersesPage: React.FC = () => {
     [handleGoLive]
   );
 
+  const updateAiContextChunks = useCallback((text: string, maxChunks: number) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (maxChunks <= 0) {
+      aiContextChunksRef.current = [];
+      return;
+    }
+    const next = [...aiContextChunksRef.current, trimmed];
+    if (next.length > maxChunks) {
+      next.splice(0, next.length - maxChunks);
+    }
+    aiContextChunksRef.current = next;
+  }, []);
+
   /**
    * Helper function to run paraphrase detection and key point extraction
    * Handles both offline and AI-based detection based on settings
@@ -1801,12 +1822,27 @@ const SmartVersesPage: React.FC = () => {
       let keyPoints: KeyPoint[] = [];
       let paraphrasedVersesForWs: ParaphrasedVerse[] = [];
 
+      const minWords = Math.max(1, Math.floor(currentSettings.aiMinWordCount ?? 1));
+      const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount < minWords) {
+        return { scriptureReferences, keyPoints, paraphrasedVersesForWs };
+      }
+
       const paraphraseMode = currentSettings.paraphraseDetectionMode || "offline";
       const allowOfflineParaphrase =
         currentSettings.enableParaphraseDetection && paraphraseMode !== "ai";
       const allowAIParaphrase =
         currentSettings.enableParaphraseDetection && paraphraseMode !== "offline";
       let offlineParaphraseCount = 0;
+
+      const contextChunkCount = Math.max(
+        0,
+        Math.floor(currentSettings.aiContextChunkCount ?? 0)
+      );
+      const previousChunks =
+        contextChunkCount > 0
+          ? aiContextChunksRef.current.slice(-contextChunkCount)
+          : [];
 
       // Run offline paraphrase detection if enabled
       if (allowOfflineParaphrase) {
@@ -1870,6 +1906,7 @@ const SmartVersesPage: React.FC = () => {
               minParaphraseConfidence: currentSettings.paraphraseConfidenceThreshold,
               maxParaphraseResults: 3,
               minWords: currentSettings.aiMinWordCount,
+              previousChunks: previousChunks.length ? previousChunks : undefined,
             }
           );
 
@@ -2449,6 +2486,7 @@ const SmartVersesPage: React.FC = () => {
     lastInterimDirectSignatureRef.current = "";
     lastInterimParseAtRef.current = 0;
     lastInterimWordCountRef.current = 0;
+    aiContextChunksRef.current = [];
 
     // Remote transcription uses an external source - skip local engine validation.
     if (settings.remoteTranscriptionEnabled) {
@@ -2632,6 +2670,11 @@ const SmartVersesPage: React.FC = () => {
               keyPoints = result.keyPoints;
               paraphrasedVersesForWs = result.paraphrasedVersesForWs;
             }
+
+            updateAiContextChunks(
+              text,
+              Math.max(0, Math.floor(currentSettings.aiContextChunkCount ?? 0))
+            );
 
             const wsKeyPoints =
               keyPoints.length > 0

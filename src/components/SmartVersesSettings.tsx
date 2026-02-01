@@ -2675,6 +2675,26 @@ const SmartVersesSettings: React.FC<SmartVersesSettingsProps> = ({
                     Skip AI requests for short phrases like "thank you".
                   </p>
                 </div>
+
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Previous Context Chunks</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={5}
+                    value={settings.aiContextChunkCount ?? 1}
+                    onChange={(e) =>
+                      handleChange(
+                        "aiContextChunkCount",
+                        Math.max(0, Math.min(5, parseInt(e.target.value, 10) || 0))
+                      )
+                    }
+                    style={inputStyle}
+                  />
+                  <p style={helpTextStyle}>
+                    Number of prior chunks to include for AI context. Set to 0 to disable.
+                  </p>
+                </div>
               </>
             )}
           </div>
