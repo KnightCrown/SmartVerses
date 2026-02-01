@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Template, Slide, AppSettings, LayoutType } from "../types";
 import { getAppSettings } from "../utils/aiConfig";
 import { generateSlidesFromText } from "../services/aiService";
@@ -49,8 +49,13 @@ const ImportModal: React.FC<ImportModalProps> = ({
   const [appSettings, setAppSettings] = useState<AppSettings>(getAppSettings());
   const [copyFeedback, setCopyFeedback] = useState<string>(""); // Added state for feedback
 
+  // Only reset form when the modal opens (not when templates changes while open).
+  // Parent reloads templates on visibility/focus, which would otherwise clear pasted text.
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
+    const justOpened = isOpen && !prevOpenRef.current;
+    prevOpenRef.current = isOpen;
+    if (justOpened) {
       setItemName(""); // Start with empty name - user must enter one
       const firstTemplate = templates.length > 0 ? templates[0] : null;
       setSelectedTemplateName(firstTemplate?.name || "");

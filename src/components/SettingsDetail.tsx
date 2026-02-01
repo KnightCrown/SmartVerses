@@ -7,6 +7,7 @@ import {
   OpenAIModelType,
   GeminiModelType,
   GroqModelType,
+  RECOMMENDED_DEFAULT_AI_MODEL,
 } from "../types";
 import "../App.css";
 import IconPickerModal from "./IconPickerModal";
@@ -171,19 +172,49 @@ const SettingsDetail: React.FC<SettingsDetailProps> = ({
     }
   }, [simpleStrategy, simpleValue, processingType]);
 
-  // Load available models when provider changes
+  // Load available models when provider changes; prepopulate recommended model when possible
   useEffect(() => {
     (async () => {
       try {
         if (aiProvider === "openai" && hasOpenAI) {
           const ids = await fetchOpenAIModels(appSettings.openAIConfig!.apiKey);
           setModels(ids);
+          if (ids.length > 0) {
+            const recommended = RECOMMENDED_DEFAULT_AI_MODEL.openai;
+            setAiModel((current) =>
+              !current || !ids.includes(current)
+                ? ids.includes(recommended)
+                  ? recommended
+                  : ids[0]
+                : current
+            );
+          }
         } else if (aiProvider === "gemini" && hasGemini) {
           const ids = await fetchGeminiModels(appSettings.geminiConfig!.apiKey);
           setModels(ids);
+          if (ids.length > 0) {
+            const recommended = RECOMMENDED_DEFAULT_AI_MODEL.gemini;
+            setAiModel((current) =>
+              !current || !ids.includes(current)
+                ? ids.includes(recommended)
+                  ? recommended
+                  : ids[0]
+                : current
+            );
+          }
         } else if (aiProvider === "groq" && hasGroq) {
           const ids = await fetchGroqModels(appSettings.groqConfig!.apiKey);
           setModels(ids);
+          if (ids.length > 0) {
+            const recommended = RECOMMENDED_DEFAULT_AI_MODEL.groq;
+            setAiModel((current) =>
+              !current || !ids.includes(current)
+                ? ids.includes(recommended)
+                  ? recommended
+                  : ids[0]
+                : current
+            );
+          }
         } else {
           setModels([]);
         }
@@ -582,7 +613,7 @@ const SettingsDetail: React.FC<SettingsDetailProps> = ({
                   onChange={(e) => {
                     const newProvider = e.target.value as AIProviderType;
                     setAiProvider(newProvider);
-                    setAiModel(undefined);
+                    setAiModel(newProvider ? RECOMMENDED_DEFAULT_AI_MODEL[newProvider] : undefined);
                   }}
                 >
                   <option value="" disabled>
@@ -595,7 +626,7 @@ const SettingsDetail: React.FC<SettingsDetailProps> = ({
                     Google Gemini {!hasGemini ? "(add API key first)" : ""}
                   </option>
                   <option value="groq" disabled={!hasGroq}>
-                    Groq {!hasGroq ? "(add API key first)" : ""}
+                    Groq (Recommended) {!hasGroq ? "(add API key first)" : ""}
                   </option>
                 </select>
               </div>
@@ -618,11 +649,15 @@ const SettingsDetail: React.FC<SettingsDetailProps> = ({
                         ? "No models available"
                         : "Select a model"}
                     </option>
-                    {models.map((m) => (
-                      <option key={m} value={m}>
-                        {aiProvider === "groq" ? formatGroqModelLabel(m) : m}
-                      </option>
-                    ))}
+                    {models.map((m) => {
+                      const label = aiProvider === "groq" ? formatGroqModelLabel(m) : m;
+                      const isRecommended = aiProvider && m === RECOMMENDED_DEFAULT_AI_MODEL[aiProvider];
+                      return (
+                        <option key={m} value={m}>
+                          {label}{isRecommended ? " — Recommended" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
