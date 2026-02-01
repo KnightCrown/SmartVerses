@@ -354,26 +354,92 @@ const MainApplicationPage: React.FC = () => {
     if (sorted.length === 0) return "";
     const lines: string[] = [];
     const BULLET = "•";
-    for (const s of sorted) {
-      const slideLines = (s.text || "").trim().split("\n").filter((t) => t.length > 0);
+    const stripListPrefix = (line: string) =>
+      line.replace(/^\s*(?:•|\d+\.)\s+/, "");
+    let i = 0;
+    while (i < sorted.length) {
+      const s = sorted[i];
+      const rawLines = (s.text || "").trim().split("\n").filter((t) => t.length > 0);
       const meta = s.liveSlidesItemMeta;
-      if (meta && meta.length >= slideLines.length && (s.liveSlidesListStyle === "bullet" || s.liveSlidesListStyle === "numbered")) {
-        const formatted: string[] = [];
-        for (let i = 0; i < slideLines.length; i++) {
-          const item = meta[i];
-          const prefix = item.isSubItem ? "\t" : "";
-          const stylePrefix =
-            s.liveSlidesListStyle === "bullet"
-              ? `${prefix}${BULLET} `
-              : s.liveSlidesListStyle === "numbered" && item.listNumber != null
-                ? `${prefix}${item.listNumber}. `
-                : "";
-          formatted.push(stylePrefix + slideLines[i]);
+      const listStyle = s.liveSlidesListStyle;
+      if (listStyle === "bullet" || listStyle === "numbered") {
+        const slideLines = rawLines.map(stripListPrefix);
+        const parentText = slideLines[0] ?? "";
+        const hasSubItem =
+          !!meta &&
+          meta.length >= 2 &&
+          meta[1]?.isSubItem &&
+          slideLines.length >= 2;
+        const isParentOnly =
+          !!meta &&
+          meta.length === 1 &&
+          !meta[0]?.isSubItem &&
+          slideLines.length === 1;
+
+        if (parentText && (isParentOnly || hasSubItem)) {
+          const childItems: { text: string; number?: number }[] = [];
+          if (hasSubItem) {
+            childItems.push({
+              text: slideLines[1],
+              number: meta?.[1]?.listNumber,
+            });
+          }
+
+          let j = i + 1;
+          while (j < sorted.length) {
+            const next = sorted[j];
+            if (next.liveSlidesListStyle !== listStyle) break;
+            const nextRaw = (next.text || "").trim().split("\n").filter((t) => t.length > 0);
+            const nextLines = nextRaw.map(stripListPrefix);
+            const nextMeta = next.liveSlidesItemMeta;
+            if (!nextMeta || nextMeta.length < 2 || !nextMeta[1]?.isSubItem) break;
+            if ((nextLines[0] ?? "") !== parentText) break;
+            if (!nextLines[1]) break;
+            childItems.push({
+              text: nextLines[1],
+              number: nextMeta[1]?.listNumber,
+            });
+            j += 1;
+          }
+
+          if (childItems.length > 0) {
+            const formattedChildren = childItems.map((child, idx) => {
+              const number =
+                listStyle === "numbered"
+                  ? child.number ?? idx + 1
+                  : undefined;
+              const prefix =
+                listStyle === "bullet"
+                  ? `${BULLET} `
+                  : `${number}. `;
+              return `\t${prefix}${child.text}`;
+            });
+            lines.push([parentText, ...formattedChildren].join("\n"));
+            i = j;
+            continue;
+          }
         }
+
+        const formatted = slideLines.map((line, idx) => {
+          const item = meta?.[idx];
+          const isSubItem = item?.isSubItem ?? false;
+          const prefix = isSubItem ? "\t" : "";
+          if (listStyle === "bullet") {
+            return `${prefix}${BULLET} ${line}`;
+          }
+          const number =
+            item?.listNumber != null && Number.isFinite(item.listNumber)
+              ? item.listNumber
+              : idx + 1;
+          return `${prefix}${number}. ${line}`;
+        });
         lines.push(formatted.join("\n"));
-      } else {
-        lines.push(slideLines.join("\n"));
+        i += 1;
+        continue;
       }
+
+      lines.push(rawLines.join("\n"));
+      i += 1;
     }
     return lines.join("\n\n");
   };

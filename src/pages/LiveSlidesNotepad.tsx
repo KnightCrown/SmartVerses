@@ -480,6 +480,10 @@ const LiveSlidesNotepad: React.FC = () => {
   const [liveSlideIndex, setLiveSlideIndex] = useState<number | null>(null);
   /** Soft notification when user clicks or tries to edit a live (locked) slide. */
   const [showLiveLockNotification, setShowLiveLockNotification] = useState(false);
+  const [hideLiveLockNotification, setHideLiveLockNotification] = useState<boolean>(() => {
+    if (!sessionId) return false;
+    return sessionStorage.getItem(`liveSlidesLockNoticeHidden:${sessionId}`) === "true";
+  });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const liveLockNotificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -565,7 +569,7 @@ const LiveSlidesNotepad: React.FC = () => {
         transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
       });
     }
-  }, []);
+  }, [hideLiveLockNotification]);
 
   const handleDownloadTranscript = useCallback(
     async (format: "text" | "json") => {
@@ -647,6 +651,12 @@ const LiveSlidesNotepad: React.FC = () => {
 
     const ws = new LiveSlidesWebSocket(wsUrl, sessionId, "notepad");
     wsRef.current = ws;
+    const unsubscribeStatus = ws.onStatus((update) => {
+      setIsConnected(update.status === "connected");
+      if (update.status !== "connected") {
+        setLiveSlideIndex(null);
+      }
+    });
 
     const applyRemoteUpdate = (update: WsSlidesUpdate) => {
       const nextText = update.raw_text || "";
@@ -674,14 +684,10 @@ const LiveSlidesNotepad: React.FC = () => {
       }, 350);
     };
 
-    ws.connect()
-      .then(() => {
-        setIsConnected(true);
-      })
-      .catch((err) => {
-        console.error("Failed to connect:", err);
-        setIsConnected(false);
-      });
+    ws.connect().catch((err) => {
+      console.error("Failed to connect:", err);
+      setIsConnected(false);
+    });
 
     // Listen for slides updates (from other notepads or initial state)
     const unsubscribe = ws.onSlidesUpdate((update) => {
@@ -740,6 +746,7 @@ const LiveSlidesNotepad: React.FC = () => {
       unsubscribe();
       unsubscribeTranscription();
       unsubscribeLiveSlideIndex();
+      unsubscribeStatus();
       if (pendingRemoteApplyTimeoutRef.current) {
         clearTimeout(pendingRemoteApplyTimeoutRef.current);
         pendingRemoteApplyTimeoutRef.current = null;
@@ -751,6 +758,7 @@ const LiveSlidesNotepad: React.FC = () => {
 
   // Show soft "live lock" notification and schedule auto-hide (used on click-in-live-line and on rejected edit)
   const showLiveLockMessage = useCallback(() => {
+    if (hideLiveLockNotification) return;
     if (liveLockNotificationTimeoutRef.current) {
       clearTimeout(liveLockNotificationTimeoutRef.current);
       liveLockNotificationTimeoutRef.current = null;
@@ -1352,6 +1360,14 @@ const LiveSlidesNotepad: React.FC = () => {
     liveLineSetRef.current = liveLineSet;
   }, [liveLineSet]);
 
+  useEffect(() => {
+    if (liveSlideIndex === null || boundaries.length === 0) return;
+    const exists = boundaries.some((b) => b.slideIndex === liveSlideIndex);
+    if (!exists) {
+      setLiveSlideIndex(null);
+    }
+  }, [liveSlideIndex, boundaries]);
+
   // Hide live-lock notification when no slide is live
   useEffect(() => {
     if (liveSlideIndex === null) {
@@ -1362,6 +1378,16 @@ const LiveSlidesNotepad: React.FC = () => {
       }
     }
   }, [liveSlideIndex]);
+
+  useEffect(() => {
+    if (hideLiveLockNotification && showLiveLockNotification) {
+      setShowLiveLockNotification(false);
+      if (liveLockNotificationTimeoutRef.current) {
+        clearTimeout(liveLockNotificationTimeoutRef.current);
+        liveLockNotificationTimeoutRef.current = null;
+      }
+    }
+  }, [hideLiveLockNotification, showLiveLockNotification]);
 
   // Clear notification timeout on unmount
   useEffect(() => {
@@ -1387,6 +1413,14 @@ const LiveSlidesNotepad: React.FC = () => {
 
   // Calculate line height for color indicators
   const lineHeight = 1.6 * 16; // 1.6rem at 16px base
+
+  const handleAddEmptyLine = useCallback(() => {
+    const current = textRef.current;
+    const nextValue = current.endsWith("\n") ? `${current}\n` : `${current}\n`;
+    const nextPos = nextValue.length;
+    applyTextUpdate(nextValue, nextPos, nextPos);
+    textareaRef.current?.focus();
+  }, [applyTextUpdate]);
 
   return (
     <div style={notepadStyles.container}>
@@ -1794,6 +1828,39 @@ This is the title of all the slide below
               </div>
             );
           })}
+          <div
+            style={{
+              height: `${lineHeight}px`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: "6px",
+              paddingRight: "2px",
+              color: notepadStyles.footer.color,
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleAddEmptyLine}
+              title="Add a new empty line"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "2px 8px",
+                borderRadius: "6px",
+                border: `1px solid ${notepadStyles.border}`,
+                backgroundColor: isDarkMode ? "#1f1f1f" : "#f1f1f1",
+                color: isDarkMode ? "#e0e0e0" : "#1a1a1a",
+                fontSize: "0.75rem",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <FaPlus size={10} />
+              New line
+            </button>
+          </div>
         </div>
 
         {/* Textarea */}
@@ -2212,10 +2279,11 @@ Result: Slide 1 = Title, Slide 2 = Title + Sub-item 1, Slide 3 = Title + Sub-ite
           aria-live="polite"
           style={{
             position: "fixed",
-            bottom: "16px",
-            left: "16px",
+            top: "72px",
+            left: "50%",
+            transform: "translateX(-50%)",
             zIndex: 900,
-            maxWidth: "min(360px, calc(100vw - 32px))",
+            maxWidth: "min(520px, calc(100vw - 32px))",
             padding: "12px 16px",
             borderRadius: "8px",
             backgroundColor: isDarkMode ? "rgba(26, 26, 26, 0.96)" : "rgba(255, 255, 255, 0.96)",
@@ -2232,6 +2300,32 @@ Result: Slide 1 = Title, Slide 2 = Title + Sub-item 1, Slide 3 = Title + Sub-ite
           <div style={{ color: isDarkMode ? "#999" : "#666" }}>
             You cannot edit it until it goes off live. You can go ahead and still edit other parts of this document.
           </div>
+          <label
+            style={{
+              marginTop: "10px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "0.8rem",
+              color: isDarkMode ? "#b0b0b0" : "#666",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={hideLiveLockNotification}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setHideLiveLockNotification(next);
+                if (sessionId) {
+                  sessionStorage.setItem(
+                    `liveSlidesLockNoticeHidden:${sessionId}`,
+                    next ? "true" : "false"
+                  );
+                }
+              }}
+            />
+            Don’t show again for this session
+          </label>
           <button
             type="button"
             onClick={() => {

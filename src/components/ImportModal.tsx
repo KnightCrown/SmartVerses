@@ -310,6 +310,20 @@ const ImportModal: React.FC<ImportModalProps> = ({
     setProcessedSlidesForImport([]);
   };
 
+  const handlePasteFromClipboard = async () => {
+    try {
+      const clipText = await navigator.clipboard.readText();
+      const next = clipText ?? "";
+      setPastedText(next);
+      setCurrentInputText(next);
+      setPreviewSlides([]);
+      setProcessedSlidesForImport([]);
+    } catch (error) {
+      console.error("Failed to read clipboard:", error);
+      alert("Unable to read from clipboard. Please paste manually.");
+    }
+  };
+
   const handleSubmit = () => {
     // No longer async, uses already processed slides
     if (!itemName.trim() || !selectedTemplateName) {
@@ -421,6 +435,7 @@ const ImportModal: React.FC<ImportModalProps> = ({
               setFileName("");
               setPreviewSlides([]);
               setProcessedSlidesForImport([]);
+              void handlePasteFromClipboard();
             }}
             className={importMethod === "paste" ? "active" : ""}
             style={{ marginRight: "10px" }}

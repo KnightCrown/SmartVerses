@@ -519,7 +519,7 @@ const MediaView: React.FC = () => {
         flexDirection: "column",
         padding: "var(--spacing-4)", 
         minHeight: "calc(100vh - 51px)",
-        height: "100%",
+        height: "calc(100vh - 51px)",
         backgroundColor: "var(--app-bg-color)",
         color: "var(--app-text-color)",
         outline: "none",
@@ -739,6 +739,7 @@ const MediaView: React.FC = () => {
           flex: 1,
           minHeight: 0,
           overflow: "auto",
+          paddingBottom: "var(--spacing-6)",
         }}
       >
         {/* Testimonies List */}
