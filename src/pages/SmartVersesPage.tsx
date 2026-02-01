@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { FaMicrophone, FaStop, FaPaperPlane, FaRobot, FaPlay, FaSearch, FaChevronDown, FaChevronUp, FaTrash, FaStopCircle, FaExternalLinkAlt, FaDownload, FaSpinner, FaCog, FaBroadcastTower } from "react-icons/fa";
+import { FaMicrophone, FaStop, FaPaperPlane, FaRobot, FaPlay, FaSearch, FaChevronDown, FaChevronUp, FaTrash, FaStopCircle, FaExternalLinkAlt, FaDownload, FaSpinner, FaCog, FaBroadcastTower, FaStar, FaRegStar, FaPlus } from "react-icons/fa";
 import {
   SmartVersesSettings,
   SmartVersesChatMessage,
@@ -116,6 +116,31 @@ function saveChatHistory(history: SmartVersesChatMessage[]): void {
     localStorage.setItem(SMART_VERSES_CHAT_HISTORY_KEY, JSON.stringify(trimmed));
   } catch (err) {
     console.error("Failed to save chat history:", err);
+  }
+}
+
+const SMART_VERSES_STARRED_KEY = "proassist-smartverses-starred-refs";
+
+function loadStarredRefs(): Set<string> {
+  try {
+    const stored = localStorage.getItem(SMART_VERSES_STARRED_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return new Set(parsed.filter((value) => typeof value === "string"));
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load starred references:", err);
+  }
+  return new Set();
+}
+
+function saveStarredRefs(refs: Set<string>): void {
+  try {
+    localStorage.setItem(SMART_VERSES_STARRED_KEY, JSON.stringify(Array.from(refs)));
+  } catch (err) {
+    console.error("Failed to save starred references:", err);
   }
 }
 
@@ -312,6 +337,9 @@ const SmartVersesPage: React.FC = () => {
   const [inputValue, setInputValue] = useState("");
   const [isAISearchEnabled, setIsAISearchEnabled] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [showStarredOnly, setShowStarredOnly] = useState(false);
+  const [starredRefs, setStarredRefs] = useState<Set<string>>(() => loadStarredRefs());
+  const [autoScrollChatPaused, setAutoScrollChatPaused] = useState(false);
 
   // Translation state
   const [availableTranslations, setAvailableTranslations] = useState<BibleTranslationSummary[]>([]);
@@ -372,6 +400,8 @@ const SmartVersesPage: React.FC = () => {
   // Compact detected references UI state
   const [detectedPanelCollapsed, setDetectedPanelCollapsed] = useState(false);
   const [expandedDetectedIds, setExpandedDetectedIds] = useState<Set<string>>(() => new Set());
+  const detectedPanelScrollRef = useRef<HTMLDivElement | null>(null);
+  const [autoScrollDetectedPaused, setAutoScrollDetectedPaused] = useState(false);
 
   // Transcript panel UX state
   const transcriptScrollContainerRef = useRef<HTMLDivElement>(null);
@@ -391,6 +421,7 @@ const SmartVersesPage: React.FC = () => {
   const autoClearTimeoutRef = useRef<number | null>(null);
 
   // UI refs
+  const chatScrollContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatHistoryLengthRef = useRef(0);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -840,11 +871,13 @@ const SmartVersesPage: React.FC = () => {
     const currLen = chatHistory.length;
     if (currLen > prevLen) {
       chatHistoryLengthRef.current = currLen;
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (!autoScrollChatPaused) {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
     } else {
       chatHistoryLengthRef.current = currLen;
     }
-  }, [chatHistory]);
+  }, [chatHistory, autoScrollChatPaused]);
 
   useEffect(() => {
     if (!transcriptMenuOpen) return;
@@ -1097,13 +1130,26 @@ const SmartVersesPage: React.FC = () => {
     saveChatHistory(chatHistory);
   }, [chatHistory]);
 
+  useEffect(() => {
+    saveStarredRefs(starredRefs);
+  }, [starredRefs]);
+
   // =============================================================================
   // BIBLE SEARCH HANDLERS
   // =============================================================================
 
+  const scrollChatToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+  }, []);
+
   const handleSearch = useCallback(async (query: string, overrideTranslationId?: string) => {
     const rawQuery = query.trim();
     if (!rawQuery) return [];
+
+    // Always resume auto-scroll when submitting a search.
+    setAutoScrollChatPaused(false);
 
     const defaultTranslationId =
       settings.defaultBibleTranslationId || BUILTIN_KJV_ID;
@@ -1141,6 +1187,7 @@ const SmartVersesPage: React.FC = () => {
     setTranslationDropdownOpen(false);
     setTranslationDropdownQuery("");
     setIsSearching(true);
+    scrollChatToBottom();
 
     // Add loading message
     const loadingId = `loading-${Date.now()}`;
@@ -1275,6 +1322,7 @@ const SmartVersesPage: React.FC = () => {
           }];
         }
       });
+      scrollChatToBottom();
       return references;
     } catch (error) {
       console.error("Search error:", error);
@@ -1288,6 +1336,7 @@ const SmartVersesPage: React.FC = () => {
           error: error instanceof Error ? error.message : "Unknown error",
         }];
       });
+      scrollChatToBottom();
       return [];
     } finally {
       setIsSearching(false);
@@ -1298,6 +1347,7 @@ const SmartVersesPage: React.FC = () => {
     isAISearchEnabled,
     searchTranslationId,
     settings,
+    scrollChatToBottom,
   ]);
 
   const resolveReferenceTranslationId = useCallback(
@@ -1308,6 +1358,30 @@ const SmartVersesPage: React.FC = () => {
       BUILTIN_KJV_ID,
     [searchTranslationId, settings.defaultBibleTranslationId]
   );
+
+  const getStarKey = useCallback(
+    (ref: DetectedBibleReference) => {
+      const translationId = resolveReferenceTranslationId(ref);
+      if (ref.book && ref.chapter && ref.verse) {
+        return `${translationId}:${ref.book}:${ref.chapter}:${ref.verse}`;
+      }
+      return `${translationId}:${(ref.displayRef || ref.reference || "").trim()}`;
+    },
+    [resolveReferenceTranslationId]
+  );
+
+  const toggleStarReference = useCallback((ref: DetectedBibleReference) => {
+    const key = getStarKey(ref);
+    setStarredRefs((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }, [getStarKey]);
 
   const handleReferenceTranslationChange = useCallback(
     async (ref: DetectedBibleReference, translationId: string) => {
@@ -1345,6 +1419,22 @@ const SmartVersesPage: React.FC = () => {
     },
     []
   );
+
+  const addReferenceToChatHistory = useCallback((ref: DetectedBibleReference, label?: string) => {
+    const isParaphrase = ref.source === "paraphrase";
+    const fallbackLabel = isParaphrase ? "Paraphrase added to chat" : "Reference added to chat";
+    setChatHistory((prev) => [
+      ...prev,
+      {
+        id: `manual-${Date.now()}`,
+        type: "result",
+        content: label || fallbackLabel,
+        timestamp: Date.now(),
+        references: [ref],
+      },
+    ]);
+  }, []);
+
 
 
   const handleInputChange = (value: string) => {
@@ -1415,7 +1505,10 @@ const SmartVersesPage: React.FC = () => {
   // GO LIVE FUNCTIONALITY
   // =============================================================================
 
-  const handleGoLive = useCallback(async (reference: DetectedBibleReference, fromAutoTrigger?: boolean) => {
+  const handleGoLive = useCallback(async (
+    reference: DetectedBibleReference,
+    options?: { fromAutoTrigger?: boolean; fromChatHistory?: boolean }
+  ) => {
     console.log("Going live with:", reference);
     console.log("Verse text:", reference.verseText);
     console.log("Display ref:", reference.displayRef);
@@ -1519,8 +1612,8 @@ const SmartVersesPage: React.FC = () => {
         }
       }
 
-      // Add "Went live" to chat history only when triggered by auto-trigger (transcription/paraphrase detection)
-      if (fromAutoTrigger) {
+      // Add "Went live" to chat history when not triggered from chat history
+      if (!options?.fromChatHistory) {
         setChatHistory(prev => [...prev, {
           id: `live-${Date.now()}`,
           type: "system",
@@ -1610,7 +1703,11 @@ const SmartVersesPage: React.FC = () => {
           };
         });
 
-        if (!settings.autoAddDetectedToHistory) {
+        const shouldAutoAdd =
+          updatedRef.source === "paraphrase"
+            ? settings.autoAddDetectedParaphraseToHistory
+            : settings.autoAddDetectedToHistory;
+        if (!shouldAutoAdd) {
           return updatedHistory;
         }
 
@@ -1627,10 +1724,14 @@ const SmartVersesPage: React.FC = () => {
       });
 
       if (autoTriggerOnDetectionRef.current) {
-        handleGoLive(updatedRef, true);
+        handleGoLive(updatedRef, { fromAutoTrigger: true });
       }
     },
-    [handleGoLive, settings.autoAddDetectedToHistory]
+    [
+      handleGoLive,
+      settings.autoAddDetectedToHistory,
+      settings.autoAddDetectedParaphraseToHistory,
+    ]
   );
 
   const handleTranslationCue = useCallback(
@@ -1762,7 +1863,7 @@ const SmartVersesPage: React.FC = () => {
         setDetectedReferences((prev) => [...prev, ...deduped]);
       }
 
-      if (currentSettings.autoAddDetectedToHistory && deduped.length > 0) {
+      if (currentSettings.autoAddDetectedParaphraseToHistory && deduped.length > 0) {
         const confidence = Math.round((deduped[0].confidence || 0) * 100);
         const label = sourceLabel ? `${sourceLabel}, ` : "";
         setChatHistory((prev) => [
@@ -1778,7 +1879,7 @@ const SmartVersesPage: React.FC = () => {
       }
 
       if (currentSettings.autoTriggerOnDetection && deduped.length > 0) {
-        handleGoLive(deduped[0], true);
+        handleGoLive(deduped[0], { fromAutoTrigger: true });
       }
 
       return deduped;
@@ -1907,6 +2008,7 @@ const SmartVersesPage: React.FC = () => {
               maxParaphraseResults: 3,
               minWords: currentSettings.aiMinWordCount,
               previousChunks: previousChunks.length ? previousChunks : undefined,
+              paraphraseStrictMode: currentSettings.paraphraseStrictMode,
             }
           );
 
@@ -2177,7 +2279,7 @@ const SmartVersesPage: React.FC = () => {
 
               // Auto-trigger if enabled
               if (autoTriggerOnDetectionRef.current && directRefs.length > 0) {
-                handleGoLive(directRefs[0], true);
+                handleGoLive(directRefs[0], { fromAutoTrigger: true });
               }
             }
           });
@@ -2375,7 +2477,7 @@ const SmartVersesPage: React.FC = () => {
                 }
 
                 if (autoTriggerOnDetectionRef.current) {
-                  handleGoLive(resolvedDirect[0], true);
+                  handleGoLive(resolvedDirect[0], { fromAutoTrigger: true });
                 }
               }
             }
@@ -2659,7 +2761,7 @@ const SmartVersesPage: React.FC = () => {
 
               // Auto-trigger if enabled
               if (autoTriggerOnDetectionRef.current && directRefs.length > 0) {
-                handleGoLive(directRefs[0], true);
+                handleGoLive(directRefs[0], { fromAutoTrigger: true });
               }
             } else if (
               currentSettings.enableParaphraseDetection ||
@@ -3040,6 +3142,40 @@ const SmartVersesPage: React.FC = () => {
     });
   }, []);
 
+  const handleChatScroll = useCallback(() => {
+    const el = chatScrollContainerRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+    const atBottom = distanceFromBottom < 60;
+
+    if (!atBottom && !autoScrollChatPaused) {
+      setAutoScrollChatPaused(true);
+      return;
+    }
+
+    if (atBottom && autoScrollChatPaused) {
+      setAutoScrollChatPaused(false);
+    }
+  }, [autoScrollChatPaused]);
+
+  const handleDetectedScroll = useCallback(() => {
+    const el = detectedPanelScrollRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+    const atBottom = distanceFromBottom < 40;
+
+    if (!atBottom && !autoScrollDetectedPaused) {
+      setAutoScrollDetectedPaused(true);
+      return;
+    }
+
+    if (atBottom && autoScrollDetectedPaused) {
+      setAutoScrollDetectedPaused(false);
+    }
+  }, [autoScrollDetectedPaused]);
+
   const handleTranscriptScroll = useCallback(() => {
     const el = transcriptScrollContainerRef.current;
     if (!el) return;
@@ -3059,6 +3195,15 @@ const SmartVersesPage: React.FC = () => {
       setAutoScrollPaused(false);
     }
   }, [autoScrollTranscript, autoScrollPaused]);
+
+  useEffect(() => {
+    if (detectedPanelCollapsed) return;
+    const el = detectedPanelScrollRef.current;
+    if (!el) return;
+    if (!autoScrollDetectedPaused) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [detectedReferences, detectedPanelCollapsed, autoScrollDetectedPaused]);
 
   const setAutoScrollFromCheckbox = useCallback((enabled: boolean) => {
     setAutoScrollTranscript(enabled);
@@ -3095,6 +3240,18 @@ const SmartVersesPage: React.FC = () => {
     // Show most recent first (allow full scroll list)
     return detectedReferences.slice().reverse();
   }, [detectedReferences]);
+
+  const displayedChatHistory = useMemo(() => {
+    if (!showStarredOnly) return chatHistory;
+    const filtered: SmartVersesChatMessage[] = [];
+    for (const msg of chatHistory) {
+      if (msg.type !== "result" || !msg.references) continue;
+      const starredOnly = msg.references.filter((ref) => starredRefs.has(getStarKey(ref)));
+      if (starredOnly.length === 0) continue;
+      filtered.push({ ...msg, references: starredOnly });
+    }
+    return filtered;
+  }, [chatHistory, showStarredOnly, starredRefs, getStarKey]);
 
   // =============================================================================
   // VERSE NAVIGATION STATE
@@ -3223,6 +3380,7 @@ const SmartVersesPage: React.FC = () => {
       ? settings.paraphraseReferenceColor 
       : settings.directReferenceColor;
     const isLive = liveReferenceId === ref.id;
+    const isStarred = starredRefs.has(getStarKey(ref));
     const translationId = resolveReferenceTranslationId(ref);
     const translationLabel = getTranslationLabel(translationId);
     const canSwitchTranslation = !!ref.book && !!ref.chapter && !!ref.verse;
@@ -3392,46 +3550,23 @@ const SmartVersesPage: React.FC = () => {
               </span>
             )}
           </div>
-          {showGoLive && (
-            <div style={{ display: "flex", gap: "var(--spacing-2)", alignItems: "center" }}>
-              <button
-                onClick={() => !isLive && handleGoLive(ref)}
-                className={isLive ? "" : "primary"}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  padding: "6px 12px",
-                  borderRadius: "6px",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  cursor: isLive ? "default" : "pointer",
-                  backgroundColor: isLive ? "#22c55e" : undefined,
-                  color: isLive ? "white" : undefined,
-                  border: isLive ? "none" : undefined,
-                }}
-              >
-                {isLive ? (
-                  <>
-                    <span style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      backgroundColor: "white",
-                      animation: "pulse 1.5s ease-in-out infinite",
-                    }} />
-                    Live
-                  </>
-                ) : (
-                  <>
-                    <FaPlay size={10} />
-                    Go Live
-                  </>
-                )}
-              </button>
-              {isLive && (
+          <div style={{ display: "flex", gap: "var(--spacing-2)", alignItems: "center" }}>
+            <button
+              onClick={() => toggleStarReference(ref)}
+              className="icon-button"
+              title={isStarred ? "Unstar" : "Star"}
+              style={{
+                padding: "6px",
+                color: isStarred ? "#f59e0b" : "var(--app-text-color-secondary)",
+              }}
+            >
+              {isStarred ? <FaStar size={12} /> : <FaRegStar size={12} />}
+            </button>
+            {showGoLive && (
+              <div style={{ display: "flex", gap: "var(--spacing-2)", alignItems: "center" }}>
                 <button
-                  onClick={handleOffLive}
+                  onClick={() => !isLive && handleGoLive(ref, { fromChatHistory: true })}
+                  className={isLive ? "" : "primary"}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -3440,18 +3575,54 @@ const SmartVersesPage: React.FC = () => {
                     borderRadius: "6px",
                     fontSize: "0.85rem",
                     fontWeight: 600,
-                    cursor: "pointer",
-                    backgroundColor: "#ef4444",
-                    color: "white",
-                    border: "none",
+                    cursor: isLive ? "default" : "pointer",
+                    backgroundColor: isLive ? "#22c55e" : undefined,
+                    color: isLive ? "white" : undefined,
+                    border: isLive ? "none" : undefined,
                   }}
                 >
-                  <FaStopCircle size={10} />
-                  Off Live
+                  {isLive ? (
+                    <>
+                      <span style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        backgroundColor: "white",
+                        animation: "pulse 1.5s ease-in-out infinite",
+                      }} />
+                      Live
+                    </>
+                  ) : (
+                    <>
+                      <FaPlay size={10} />
+                      Go Live
+                    </>
+                  )}
                 </button>
-              )}
-            </div>
-          )}
+                {isLive && (
+                  <button
+                    onClick={handleOffLive}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "6px 12px",
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      backgroundColor: "#ef4444",
+                      color: "white",
+                      border: "none",
+                    }}
+                  >
+                    <FaStopCircle size={10} />
+                    Off Live
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <p style={{
           margin: 0,
@@ -3541,10 +3712,32 @@ const SmartVersesPage: React.FC = () => {
           </div>
 
           <div style={{ display: "flex", gap: "6px", flex: "0 0 auto", alignItems: "center" }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              addReferenceToChatHistory(ref, "Added from detected references");
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 10px",
+              borderRadius: "8px",
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              backgroundColor: "var(--app-input-bg-color)",
+              color: "var(--app-text-color)",
+              border: "1px solid var(--app-border-color)",
+            }}
+          >
+            <FaPlus size={10} />
+            Add to chat
+          </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (!isLive) handleGoLive(ref);
+              if (!isLive) handleGoLive(ref);
               }}
               className={isLive ? "" : "primary"}
               style={{
@@ -3987,6 +4180,17 @@ const SmartVersesPage: React.FC = () => {
               </button>
             )}
             <button
+              onClick={() => setShowStarredOnly((prev) => !prev)}
+              className="icon-button"
+              title={showStarredOnly ? "Show all results" : "Show starred only"}
+              style={{
+                padding: "6px",
+                color: showStarredOnly ? "#f59e0b" : undefined,
+              }}
+            >
+              {showStarredOnly ? <FaStar size={12} /> : <FaRegStar size={12} />}
+            </button>
+            <button
               onClick={handleClearHistory}
               className="icon-button"
               title="Clear history"
@@ -3999,26 +4203,32 @@ const SmartVersesPage: React.FC = () => {
         </div>
 
         {/* Chat Messages - scrollable; only this area scrolls */}
-        <div style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          padding: "var(--spacing-4)",
-        }}>
-          {chatHistory.length === 0 ? (
+        <div
+          ref={chatScrollContainerRef}
+          onScroll={handleChatScroll}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            padding: "var(--spacing-4)",
+          }}
+        >
+          {displayedChatHistory.length === 0 ? (
             <div style={{
               textAlign: "center",
               color: "var(--app-text-color-secondary)",
               padding: "var(--spacing-8)",
             }}>
               <FaSearch size={32} style={{ marginBottom: "var(--spacing-3)", opacity: 0.5 }} />
-              <p>Search for Bible verses</p>
+              <p>{showStarredOnly ? "No starred scriptures yet" : "Search for Bible verses"}</p>
               <p style={{ fontSize: "0.85rem" }}>
-                Type a reference like "John 3:16" or a phrase like "For God so loved"
+                {showStarredOnly
+                  ? "Star a verse card to save it here."
+                  : "Type a reference like \"John 3:16\" or a phrase like \"For God so loved\""}
               </p>
             </div>
           ) : (
-            chatHistory.map((message) => (
+            displayedChatHistory.map((message) => (
               <div
                 key={message.id}
                 style={{
@@ -5036,6 +5246,8 @@ const SmartVersesPage: React.FC = () => {
               </div>
             )}
             <div
+              ref={detectedPanelScrollRef}
+              onScroll={handleDetectedScroll}
               style={{
                 maxHeight: detectedPanelCollapsed ? "52px" : "320px",
                 overflowY: detectedPanelCollapsed ? "hidden" : "auto",

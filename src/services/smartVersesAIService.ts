@@ -165,6 +165,7 @@ export async function analyzeTranscriptChunk(
     maxParaphraseResults?: number;
     minWords?: number;
     previousChunks?: string[];
+    paraphraseStrictMode?: boolean;
   }
 ): Promise<TranscriptAnalysisResult> {
   const debugAI =
@@ -234,6 +235,11 @@ export async function analyzeTranscriptChunk(
       `DETECT PARAPHRASED BIBLE VERSES: Identify when the speaker is paraphrasing or alluding to specific Bible verses without directly quoting them. Be conservative - only identify clear paraphrases, not vague thematic connections.`
     );
   }
+  if (detectParaphrases && options?.paraphraseStrictMode) {
+    tasks.push(
+      `STRICT PARAPHRASE MODE: Only return verses when the wording is clearly a direct or near-direct quotation of a specific scripture. Do not match based on theme, topic, or general ideas.`
+    );
+  }
   if (extractKeyPoints) {
     tasks.push(
       `EXTRACT KEY POINTS: Identify quotable, actionable, or memorable statements that would make good lower-thirds or slides. Be selective - only extract truly quotable content, not generic statements.`
@@ -292,6 +298,11 @@ ${keyPointInstructions}
   rules.push(
     `- Only return paraphrased verses when the current chunk clearly alludes to a specific verse or Bible story (names, events, or recognizable phrasing)`
   );
+  if (detectParaphrases && options?.paraphraseStrictMode) {
+    rules.push(
+      `- Strict mode: ignore thematic statements or general doctrine (e.g., "God loves the world"). Only match when the phrasing is unmistakably tied to a specific verse.`
+    );
+  }
   rules.push(`- If nothing is found, return empty arrays`);
   rules.push(`- Always use proper Bible reference format (e.g., "John 3:16", "Romans 8:28-30")`);
 

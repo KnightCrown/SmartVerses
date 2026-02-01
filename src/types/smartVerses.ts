@@ -280,6 +280,7 @@ export interface SmartVersesSettings {
   // AI Detection settings (for transcription)
   enableParaphraseDetection: boolean;
   paraphraseDetectionMode?: ParaphraseDetectionMode;
+  paraphraseStrictMode?: boolean; // Stricter AI paraphrase rules (AI only)
   enableKeyPointExtraction: boolean;
   keyPointExtractionInstructions?: string;
   paraphraseConfidenceThreshold: number; // Default 0.6
@@ -288,6 +289,7 @@ export interface SmartVersesSettings {
   
   // Display settings
   autoAddDetectedToHistory: boolean; // Add detected refs from transcription to chat history
+  autoAddDetectedParaphraseToHistory: boolean; // Add paraphrased refs from transcription to chat history
   highlightDirectReferences: boolean;
   highlightParaphrasedReferences: boolean;
   directReferenceColor: string;      // Default pink/magenta
@@ -336,6 +338,7 @@ export const DEFAULT_SMART_VERSES_SETTINGS: SmartVersesSettings = {
   bibleSearchConfidenceThreshold: 0.6,
   enableParaphraseDetection: true,
   paraphraseDetectionMode: 'offline',
+  paraphraseStrictMode: false,
   enableKeyPointExtraction: false,
   keyPointExtractionInstructions:
     "Extract 1–2 concise, quotable key points suitable for slides/lower-thirds. Prefer short sentences, avoid filler, keep the original voice, and skip vague statements.",
@@ -343,6 +346,7 @@ export const DEFAULT_SMART_VERSES_SETTINGS: SmartVersesSettings = {
   aiMinWordCount: 6,
   aiContextChunkCount: 1,
   autoAddDetectedToHistory: true,
+  autoAddDetectedParaphraseToHistory: true,
   highlightDirectReferences: true,
   highlightParaphrasedReferences: true,
   directReferenceColor: '#ec4899', // Pink
