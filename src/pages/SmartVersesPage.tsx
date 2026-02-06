@@ -15,7 +15,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { FaMicrophone, FaStop, FaPaperPlane, FaRobot, FaPlay, FaSearch, FaChevronDown, FaChevronUp, FaTrash, FaStopCircle, FaExternalLinkAlt, FaDownload, FaSpinner, FaCog, FaBroadcastTower, FaStar, FaRegStar, FaPlus } from "react-icons/fa";
+import { FaMicrophone, FaStop, FaPaperPlane, FaRobot, FaPlay, FaSearch, FaChevronDown, FaChevronUp, FaTrash, FaStopCircle, FaExternalLinkAlt, FaDownload, FaSpinner, FaCog, FaBroadcastTower, FaStar, FaRegStar, FaPlus, FaThumbsDown, FaCheck } from "react-icons/fa";
 import {
   SmartVersesSettings,
   SmartVersesChatMessage,
@@ -76,6 +76,10 @@ import { WsTranscriptionStatus, WsTranscriptionStream } from "../types/liveSlide
 import { mapAudioLevel } from "../utils/audioMeter";
 import { normalizeRemoteTranscriptionTarget } from "../utils/remoteTranscription";
 import { saveTranscriptFile } from "../utils/transcriptDownload";
+import {
+  buildReportPayload,
+  sendReportTranscript,
+} from "../services/reportTranscriptService";
 import TranscriptOptionsMenu from "../components/transcription/TranscriptOptionsMenu";
 import type { BibleTranslationSummary } from "../types/bible";
 import "../App.css";
@@ -120,6 +124,7 @@ function saveChatHistory(history: SmartVersesChatMessage[]): void {
 }
 
 const SMART_VERSES_STARRED_KEY = "proassist-smartverses-starred-refs";
+const REPORT_ISSUE_SEEN_KEY = "proassist-report-issue-seen";
 
 function loadStarredRefs(): Set<string> {
   try {
@@ -414,6 +419,18 @@ const SmartVersesPage: React.FC = () => {
   const [transcriptDisplayOptions, setTranscriptDisplayOptions] = useState<TranscriptDisplayOptions>(
     () => loadTranscriptDisplayOptions()
   );
+
+  // Report missing scripture: which segments were reported, which is loading, first-time popup
+  const [reportedSegmentIds, setReportedSegmentIds] = useState<Set<string>>(() => new Set());
+  const [loadingReportSegmentId, setLoadingReportSegmentId] = useState<string | null>(null);
+  const [reportIssueSeen, setReportIssueSeen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(REPORT_ISSUE_SEEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [pendingReportConfirmSegmentId, setPendingReportConfirmSegmentId] = useState<string | null>(null);
 
   // Live state - tracks which reference is currently live (only one at a time)
   const [liveReferenceId, setLiveReferenceId] = useState<string | null>(null);
@@ -1117,6 +1134,66 @@ const SmartVersesPage: React.FC = () => {
     },
     [transcriptHistory, interimTranscript, detectedReferences, transcriptKeyPoints]
   );
+
+  const sendReportForSegment = useCallback(
+    async (segmentId: string) => {
+      const payload = buildReportPayload(
+        transcriptHistory,
+        segmentId,
+        detectedReferences,
+        transcriptKeyPoints,
+        interimTranscript
+      );
+      if (!payload) return;
+      setLoadingReportSegmentId(segmentId);
+      const result = await sendReportTranscript(payload);
+      setLoadingReportSegmentId(null);
+      if (result.ok) {
+        setReportedSegmentIds((prev) => new Set(prev).add(segmentId));
+      }
+    },
+    [
+      transcriptHistory,
+      detectedReferences,
+      transcriptKeyPoints,
+      interimTranscript,
+    ]
+  );
+
+  const handleReportSegment = useCallback(
+    (segmentId: string) => {
+      if (reportedSegmentIds.has(segmentId) || loadingReportSegmentId != null) return;
+
+      if (!reportIssueSeen) {
+        setPendingReportConfirmSegmentId(segmentId);
+        return;
+      }
+
+      void sendReportForSegment(segmentId);
+    },
+    [
+      reportedSegmentIds,
+      loadingReportSegmentId,
+      reportIssueSeen,
+      sendReportForSegment,
+    ]
+  );
+
+  const handleReportConfirm = useCallback(() => {
+    const segmentId = pendingReportConfirmSegmentId;
+    setPendingReportConfirmSegmentId(null);
+    try {
+      localStorage.setItem(REPORT_ISSUE_SEEN_KEY, "1");
+    } catch {
+      // ignore
+    }
+    setReportIssueSeen(true);
+    if (segmentId) void sendReportForSegment(segmentId);
+  }, [pendingReportConfirmSegmentId, sendReportForSegment]);
+
+  const handleReportCancel = useCallback(() => {
+    setPendingReportConfirmSegmentId(null);
+  }, []);
 
   // Scroll to bottom of transcript
   useEffect(() => {
@@ -3943,6 +4020,72 @@ const SmartVersesPage: React.FC = () => {
       padding: "var(--spacing-4)",
       position: "relative",
     }}>
+      {/* Report missing scripture – first-time confirmation */}
+      {pendingReportConfirmSegmentId != null && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(0,0,0,0.5)",
+          }}
+          onClick={handleReportCancel}
+        >
+          <div
+            role="dialog"
+            aria-labelledby="report-confirm-title"
+            style={{
+              maxWidth: 360,
+              padding: "var(--spacing-4)",
+              borderRadius: 12,
+              backgroundColor: "var(--app-header-bg)",
+              border: "1px solid var(--app-border-color)",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p id="report-confirm-title" style={{ margin: "0 0 var(--spacing-3)", fontWeight: 600, color: "var(--app-text-color)" }}>
+              Report missing scripture
+            </p>
+            <p style={{ margin: "0 0 var(--spacing-4)", fontSize: "0.9rem", color: "var(--app-text-color-secondary)", lineHeight: 1.5 }}>
+              This will send this segment (and the previous two for context) to our team so we can improve detection next time.
+            </p>
+            <div style={{ display: "flex", gap: "var(--spacing-2)", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={handleReportCancel}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "1px solid var(--app-border-color)",
+                  background: "transparent",
+                  color: "var(--app-text-color)",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleReportConfirm}
+                className="primary"
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           position: "absolute",
@@ -4940,6 +5083,9 @@ const SmartVersesPage: React.FC = () => {
                   return null;
                 }
                 
+                const isReported = reportedSegmentIds.has(segment.id);
+                const isReportLoading = loadingReportSegmentId === segment.id;
+
                 return (
                   <div
                     key={`${segment.id}-${segment.timestamp}-${index}`}
@@ -4951,6 +5097,8 @@ const SmartVersesPage: React.FC = () => {
                       border: "1px solid var(--app-border-color)",
                     }}
                   >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-2)", minWidth: 0 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                     {showTranscriptText && (
                       <p
                         style={{
@@ -5168,6 +5316,29 @@ const SmartVersesPage: React.FC = () => {
                         </div>
                       </div>
                     )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleReportSegment(segment.id)}
+                        disabled={isReported || isReportLoading}
+                        className="icon-button"
+                        title={isReported ? "Reported" : "Report missing scripture detection"}
+                        style={{
+                          padding: "6px",
+                          flexShrink: 0,
+                          color: isReported ? "#22c55e" : "var(--app-text-color-secondary)",
+                          cursor: isReported || isReportLoading ? "default" : "pointer",
+                        }}
+                      >
+                        {isReportLoading ? (
+                          <FaSpinner size={12} style={{ animation: "spin 0.8s linear infinite" }} />
+                        ) : isReported ? (
+                          <FaCheck size={12} />
+                        ) : (
+                          <FaThumbsDown size={12} />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 );
               })}

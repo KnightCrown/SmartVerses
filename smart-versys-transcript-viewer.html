@@ -1,0 +1,1244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Versys Transcript Viewer</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121b2e;
+      --panel-soft: #18223a;
+      --text: #e6edf7;
+      --muted: #9ca9be;
+      --border: #2a3652;
+      --direct: #ec4899;
+      --paraphrase: #3b82f6;
+      --success: #22c55e;
+      --warning: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 0%, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0) 40%),
+        radial-gradient(circle at 90% 10%, rgba(236, 72, 153, 0.16) 0%, rgba(236, 72, 153, 0) 42%),
+        var(--bg);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .app {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 12px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-soft) 100%);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .toolbar {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10, 16, 30, 0.45);
+    }
+
+    .title-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .title-row h1 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: 0.01em;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .upload-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: #1f2b49;
+      color: var(--text);
+      border-radius: 9px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.86rem;
+    }
+
+    .btn:hover {
+      filter: brightness(1.1);
+    }
+
+    .btn.primary {
+      background: #2457e6;
+      border-color: #3f6df0;
+    }
+
+    .drop-zone {
+      flex: 1;
+      min-width: 240px;
+      border: 1px dashed #40507a;
+      border-radius: 9px;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .drop-zone.active {
+      border-color: #5f7de2;
+      background: rgba(59, 130, 246, 0.12);
+      color: #bfd2ff;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .controls label {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 0.84rem;
+      color: var(--muted);
+      user-select: none;
+      cursor: pointer;
+    }
+
+    .controls input[type="search"] {
+      margin-left: auto;
+      min-width: 220px;
+      border: 1px solid var(--border);
+      background: rgba(11, 17, 30, 0.7);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 0.85rem;
+    }
+
+    .controls input[type="search"]::placeholder {
+      color: #7c8aa8;
+    }
+
+    .error {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #fecaca;
+      border-radius: 9px;
+      padding: 9px 11px;
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    .content {
+      display: grid;
+      grid-template-rows: minmax(300px, 1fr) auto;
+      min-height: 520px;
+    }
+
+    .transcript-list {
+      overflow-y: auto;
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      padding: 26px 14px;
+      font-size: 0.9rem;
+    }
+
+    .segment-card {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(12, 18, 32, 0.75);
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .segment-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .segment-text {
+      margin: 0;
+      line-height: 1.62;
+      color: var(--text);
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      padding: 6px 10px;
+      border: 1px solid var(--chip-color, var(--direct));
+      color: var(--chip-color, var(--direct));
+      background: rgba(12, 18, 32, 0.6);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.79rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .chip .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.9;
+      flex: 0 0 auto;
+    }
+
+    .chip .confidence {
+      border-radius: 999px;
+      font-size: 0.72rem;
+      padding: 2px 6px;
+      background: rgba(59, 130, 246, 0.16);
+      color: var(--paraphrase);
+    }
+
+    .chip .toggle {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid currentColor;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 0.68rem;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+
+    .expanded-refs {
+      display: grid;
+      gap: 8px;
+    }
+
+    .expanded-ref {
+      border: 1px solid var(--chip-color, var(--direct));
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: rgba(12, 18, 32, 0.5);
+      display: grid;
+      gap: 6px;
+    }
+
+    .expanded-ref .ref-title {
+      font-weight: 800;
+      color: var(--chip-color, var(--direct));
+      font-size: 0.86rem;
+    }
+
+    .expanded-ref p {
+      margin: 0;
+      line-height: 1.5;
+      font-size: 0.92rem;
+      color: var(--text);
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .highlight {
+      font-weight: 700;
+      color: #fde68a;
+    }
+
+    .matched {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .key-points {
+      display: grid;
+      gap: 6px;
+    }
+
+    .key-points-title {
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .key-point {
+      border: 1px solid var(--warning);
+      border-left-width: 4px;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: rgba(245, 158, 11, 0.11);
+      display: grid;
+      gap: 3px;
+    }
+
+    .key-point .category {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #fbbf24;
+    }
+
+    .key-point .text {
+      font-size: 0.84rem;
+      line-height: 1.4;
+      color: var(--text);
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .interim {
+      border-style: dashed;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .detected-panel {
+      border-top: 1px solid var(--border);
+      background: rgba(10, 16, 30, 0.5);
+    }
+
+    .detected-header {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      border: 0;
+      width: 100%;
+      text-align: left;
+      color: var(--text);
+      background: rgba(16, 24, 43, 0.9);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.86rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .detected-body {
+      max-height: 320px;
+      overflow-y: auto;
+      padding: 10px 14px;
+    }
+
+    .detected-row {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: rgba(12, 18, 32, 0.65);
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .detected-toggle {
+      border: 0;
+      width: 100%;
+      text-align: left;
+      background: transparent;
+      color: var(--text);
+      padding: 10px 11px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .detected-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .detected-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--chip-color, var(--direct));
+    }
+
+    .source-tag {
+      font-size: 0.67rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-radius: 999px;
+      padding: 2px 6px;
+      border: 1px solid var(--chip-color, var(--direct));
+      color: var(--chip-color, var(--direct));
+    }
+
+    .detected-content {
+      padding: 0 11px 11px 30px;
+    }
+
+    .detected-content .box {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(9, 14, 24, 0.65);
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .detected-content p {
+      margin: 0;
+      line-height: 1.5;
+      font-size: 0.88rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 12px;
+      }
+
+      .toolbar {
+        padding: 12px;
+      }
+
+      .controls input[type="search"] {
+        margin-left: 0;
+        width: 100%;
+      }
+
+      .content {
+        min-height: 420px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="panel">
+      <div class="toolbar">
+        <div class="title-row">
+          <h1>Smart Versys Transcript + Detected Scripture Viewer</h1>
+          <div id="meta" class="meta">No file loaded</div>
+        </div>
+
+        <div class="upload-row">
+          <button id="chooseBtn" class="btn primary" type="button">Upload JSON</button>
+          <button id="clearBtn" class="btn" type="button">Clear</button>
+          <div id="dropZone" class="drop-zone">Drop transcript JSON here</div>
+          <input id="fileInput" type="file" accept=".json,application/json" class="hidden" />
+        </div>
+
+        <div class="controls">
+          <label><input id="showTranscript" type="checkbox" checked /> Transcript</label>
+          <label><input id="showRefs" type="checkbox" checked /> Scripture refs</label>
+          <label><input id="showKeyPoints" type="checkbox" /> Key points</label>
+          <input id="searchInput" type="search" placeholder="Search transcript..." />
+        </div>
+
+        <div id="error" class="error"></div>
+      </div>
+
+      <div class="content">
+        <div id="transcriptList" class="transcript-list">
+          <div class="empty">Upload a transcript JSON file to render it.</div>
+        </div>
+
+        <section id="detectedPanel" class="detected-panel hidden">
+          <button id="detectedHeader" type="button" class="detected-header">
+            <span id="detectedTitle">Detected References (0)</span>
+            <span id="detectedToggleLabel" class="muted">Collapse</span>
+          </button>
+          <div id="detectedBody" class="detected-body"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const DIRECT_COLOR = "#ec4899";
+    const PARAPHRASE_COLOR = "#3b82f6";
+    const DEFAULT_FILTER_PHRASES = ["[BLANK_AUDIO]", "[INAUDIBLE]"];
+
+    const state = {
+      payload: null,
+      showTranscript: true,
+      showScriptureRefs: true,
+      showKeyPoints: false,
+      searchQuery: "",
+      detectedCollapsed: false,
+      expandedInlineRefIds: new Set(),
+      expandedDetectedIds: new Set(),
+      loadedFileName: "",
+    };
+
+    const el = {
+      meta: document.getElementById("meta"),
+      chooseBtn: document.getElementById("chooseBtn"),
+      clearBtn: document.getElementById("clearBtn"),
+      fileInput: document.getElementById("fileInput"),
+      dropZone: document.getElementById("dropZone"),
+      error: document.getElementById("error"),
+      transcriptList: document.getElementById("transcriptList"),
+      detectedPanel: document.getElementById("detectedPanel"),
+      detectedHeader: document.getElementById("detectedHeader"),
+      detectedTitle: document.getElementById("detectedTitle"),
+      detectedToggleLabel: document.getElementById("detectedToggleLabel"),
+      detectedBody: document.getElementById("detectedBody"),
+      showTranscript: document.getElementById("showTranscript"),
+      showRefs: document.getElementById("showRefs"),
+      showKeyPoints: document.getElementById("showKeyPoints"),
+      searchInput: document.getElementById("searchInput"),
+    };
+
+    function normalizeTranscriptMarker(value) {
+      return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/^[\[(]+/, "")
+        .replace(/[\])]+$/, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    const transcriptFilterSet = new Set(
+      DEFAULT_FILTER_PHRASES.map((phrase) => normalizeTranscriptMarker(phrase))
+    );
+
+    function shouldHideTranscriptText(text) {
+      return transcriptFilterSet.has(normalizeTranscriptMarker(text));
+    }
+
+    function isMusicMarker(text) {
+      return normalizeTranscriptMarker(text).includes("music");
+    }
+
+    function escapeRegExp(value) {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function isFiniteNumber(value) {
+      return typeof value === "number" && Number.isFinite(value);
+    }
+
+    function sourceColor(source) {
+      return source === "paraphrase" ? PARAPHRASE_COLOR : DIRECT_COLOR;
+    }
+
+    function normalizeRef(ref, fallbackSource) {
+      if (!ref || typeof ref !== "object") return null;
+      const source = ref.source === "paraphrase" ? "paraphrase" : (fallbackSource || "direct");
+      const displayRef = String(ref.displayRef || ref.reference || "").trim() || "Unknown reference";
+      const reference = String(ref.reference || displayRef).trim() || displayRef;
+      const verseText = String(ref.verseText || "").trim();
+      const id = String(
+        ref.id ||
+        [
+          source,
+          displayRef,
+          String(ref.timestamp || ""),
+          String(ref.transcriptText || ""),
+          Math.random().toString(36).slice(2, 8),
+        ].join("-")
+      );
+
+      return {
+        ...ref,
+        id,
+        source,
+        displayRef,
+        reference,
+        verseText,
+        confidence: typeof ref.confidence === "number" ? ref.confidence : null,
+        matchedPhrase: typeof ref.matchedPhrase === "string" ? ref.matchedPhrase : "",
+        transcriptText: typeof ref.transcriptText === "string" ? ref.transcriptText : "",
+        timestamp: isFiniteNumber(ref.timestamp) ? ref.timestamp : Date.now(),
+        highlight: Array.isArray(ref.highlight) ? ref.highlight : [],
+      };
+    }
+
+    function dedupeRefs(refs, fallbackSource) {
+      const unique = [];
+      const seen = new Set();
+      for (const item of refs || []) {
+        const normalized = normalizeRef(item, fallbackSource);
+        if (!normalized) continue;
+        const key = normalized.id || `${normalized.source}:${normalized.displayRef}:${normalized.timestamp}:${normalized.transcriptText}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        unique.push(normalized);
+      }
+      return unique;
+    }
+
+    function normalizePayload(raw) {
+      const obj = raw && typeof raw === "object" ? raw : {};
+      const topDirect = Array.isArray(obj.references && obj.references.direct)
+        ? dedupeRefs(obj.references.direct, "direct")
+        : [];
+      const topParaphrase = Array.isArray(obj.references && obj.references.paraphrase)
+        ? dedupeRefs(obj.references.paraphrase, "paraphrase")
+        : [];
+      const topRefs = [...topDirect, ...topParaphrase];
+
+      const refsByTranscriptText = new Map();
+      for (const ref of topRefs) {
+        const key = (ref.transcriptText || "").trim();
+        if (!key) continue;
+        const list = refsByTranscriptText.get(key) || [];
+        list.push(ref);
+        refsByTranscriptText.set(key, list);
+      }
+
+      const rawSegments = Array.isArray(obj.segments) ? obj.segments : [];
+      const segments = rawSegments.map((segment, index) => {
+        const text = typeof segment.text === "string" ? segment.text : "";
+        const segmentRefs =
+          Array.isArray(segment.references) && segment.references.length > 0
+            ? dedupeRefs(segment.references)
+            : dedupeRefs(refsByTranscriptText.get(text) || []);
+        const keyPoints = Array.isArray(segment.keyPoints)
+          ? segment.keyPoints
+              .filter((point) => point && typeof point.text === "string")
+              .map((point) => ({
+                text: String(point.text || ""),
+                category: typeof point.category === "string" ? point.category : "",
+              }))
+          : [];
+        return {
+          id: String(segment.id || `segment-${index + 1}`),
+          text,
+          timestamp: isFiniteNumber(segment.timestamp) ? segment.timestamp : Date.now() + index,
+          isFinal: segment.isFinal !== false,
+          references: segmentRefs,
+          keyPoints,
+        };
+      });
+
+      const detectedReferences = [];
+      const seenDetected = new Set();
+      const pushDetected = (ref) => {
+        const key = ref.id || `${ref.source}:${ref.displayRef}:${ref.timestamp}:${ref.transcriptText}`;
+        if (seenDetected.has(key)) return;
+        seenDetected.add(key);
+        detectedReferences.push(ref);
+      };
+
+      for (const segment of segments) {
+        for (const ref of segment.references) {
+          pushDetected(ref);
+        }
+      }
+      for (const ref of topRefs) {
+        pushDetected(ref);
+      }
+
+      detectedReferences.sort((a, b) => {
+        const aTime = isFiniteNumber(a.timestamp) ? a.timestamp : 0;
+        const bTime = isFiniteNumber(b.timestamp) ? b.timestamp : 0;
+        return bTime - aTime;
+      });
+
+      return {
+        generatedAt: typeof obj.generatedAt === "string" ? obj.generatedAt : "",
+        interim: typeof obj.interim === "string" ? obj.interim : "",
+        segments,
+        detectedReferences,
+      };
+    }
+
+    function formatTimestamp(value) {
+      if (!isFiniteNumber(value)) return "";
+      try {
+        return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      } catch (_error) {
+        return "";
+      }
+    }
+
+    function makeHighlightedVerseNode(verseText, highlightWords) {
+      const fragment = document.createDocumentFragment();
+      const text = String(verseText || "");
+
+      if (!Array.isArray(highlightWords) || highlightWords.length === 0) {
+        fragment.appendChild(document.createTextNode(text));
+        return fragment;
+      }
+
+      const words = highlightWords
+        .map((word) => String(word || "").trim())
+        .filter(Boolean)
+        .map((word) => escapeRegExp(word))
+        .sort((a, b) => b.length - a.length);
+
+      if (words.length === 0) {
+        fragment.appendChild(document.createTextNode(text));
+        return fragment;
+      }
+
+      const splitPattern = new RegExp(`(${words.join("|")})`, "gi");
+      const fullMatchPattern = new RegExp(`^(${words.join("|")})$`, "i");
+      const parts = text.split(splitPattern);
+
+      for (const part of parts) {
+        if (!part) continue;
+        if (fullMatchPattern.test(part)) {
+          const strong = document.createElement("span");
+          strong.className = "highlight";
+          strong.textContent = part;
+          fragment.appendChild(strong);
+        } else {
+          fragment.appendChild(document.createTextNode(part));
+        }
+      }
+
+      return fragment;
+    }
+
+    function showError(message) {
+      el.error.textContent = message;
+      el.error.style.display = "block";
+    }
+
+    function clearError() {
+      el.error.textContent = "";
+      el.error.style.display = "none";
+    }
+
+    function makeRefChip(ref) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip";
+      chip.style.setProperty("--chip-color", sourceColor(ref.source));
+      chip.title = ref.verseText || ref.displayRef;
+
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      chip.appendChild(dot);
+
+      const label = document.createElement("span");
+      label.textContent = ref.displayRef;
+      chip.appendChild(label);
+
+      if (ref.source === "paraphrase" && typeof ref.confidence === "number") {
+        const confidence = document.createElement("span");
+        confidence.className = "confidence";
+        confidence.textContent = `${Math.round(ref.confidence * 100)}%`;
+        chip.appendChild(confidence);
+      }
+
+      const toggle = document.createElement("span");
+      toggle.className = "toggle";
+      const isExpanded = state.expandedInlineRefIds.has(ref.id);
+      toggle.textContent = isExpanded ? "^" : "v";
+      chip.appendChild(toggle);
+
+      chip.addEventListener("click", () => {
+        if (state.expandedInlineRefIds.has(ref.id)) {
+          state.expandedInlineRefIds.delete(ref.id);
+        } else {
+          state.expandedInlineRefIds.add(ref.id);
+        }
+        render();
+      });
+
+      return chip;
+    }
+
+    function makeExpandedRef(ref) {
+      const box = document.createElement("div");
+      box.className = "expanded-ref";
+      box.style.setProperty("--chip-color", sourceColor(ref.source));
+
+      const title = document.createElement("div");
+      title.className = "ref-title";
+      title.textContent = ref.displayRef;
+      box.appendChild(title);
+
+      const text = document.createElement("p");
+      text.appendChild(makeHighlightedVerseNode(ref.verseText || "", ref.highlight || []));
+      box.appendChild(text);
+
+      if (ref.source === "paraphrase" && ref.matchedPhrase) {
+        const matched = document.createElement("div");
+        matched.className = "matched";
+        matched.textContent = `Matched: "${ref.matchedPhrase}"`;
+        box.appendChild(matched);
+      }
+
+      return box;
+    }
+
+    function makeKeyPoint(point) {
+      const item = document.createElement("div");
+      item.className = "key-point";
+
+      if (point.category) {
+        const category = document.createElement("div");
+        category.className = "category";
+        category.textContent = point.category;
+        item.appendChild(category);
+      }
+
+      const text = document.createElement("div");
+      text.className = "text";
+      text.textContent = point.text || "";
+      item.appendChild(text);
+
+      return item;
+    }
+
+    function makeSegmentCard(segment) {
+      const refs = Array.isArray(segment.references) ? segment.references : [];
+      const keyPoints = Array.isArray(segment.keyPoints) ? segment.keyPoints : [];
+
+      const showTranscriptText = state.showTranscript && !!segment.text;
+      const showRefs = state.showScriptureRefs && refs.length > 0;
+      const showKeyPoints = state.showKeyPoints && keyPoints.length > 0;
+
+      if (!showTranscriptText && !showRefs && !showKeyPoints) {
+        return null;
+      }
+
+      const card = document.createElement("article");
+      card.className = "segment-card";
+
+      const meta = document.createElement("div");
+      meta.className = "segment-meta";
+      const left = document.createElement("span");
+      left.textContent = segment.isFinal ? "Final segment" : "Segment";
+      const right = document.createElement("span");
+      right.textContent = formatTimestamp(segment.timestamp);
+      meta.appendChild(left);
+      meta.appendChild(right);
+      card.appendChild(meta);
+
+      if (showTranscriptText) {
+        const text = document.createElement("p");
+        text.className = "segment-text";
+        text.textContent = segment.text;
+        card.appendChild(text);
+      }
+
+      if (showRefs) {
+        const chips = document.createElement("div");
+        chips.className = "chips";
+        for (const ref of refs) {
+          chips.appendChild(makeRefChip(ref));
+        }
+        card.appendChild(chips);
+
+        const expanded = refs.filter((ref) => state.expandedInlineRefIds.has(ref.id));
+        if (expanded.length > 0) {
+          const expandedWrap = document.createElement("div");
+          expandedWrap.className = "expanded-refs";
+          for (const ref of expanded) {
+            expandedWrap.appendChild(makeExpandedRef(ref));
+          }
+          card.appendChild(expandedWrap);
+        }
+      }
+
+      if (showKeyPoints) {
+        const keyPointsWrap = document.createElement("div");
+        keyPointsWrap.className = "key-points";
+
+        const title = document.createElement("div");
+        title.className = "key-points-title";
+        title.textContent = "Key points";
+        keyPointsWrap.appendChild(title);
+
+        for (const point of keyPoints) {
+          keyPointsWrap.appendChild(makeKeyPoint(point));
+        }
+
+        card.appendChild(keyPointsWrap);
+      }
+
+      return card;
+    }
+
+    function makeInterimCard(text) {
+      const card = document.createElement("article");
+      card.className = "segment-card interim";
+
+      const label = document.createElement("div");
+      label.className = "segment-meta";
+      const left = document.createElement("span");
+      left.textContent = "Interim transcript";
+      label.appendChild(left);
+      card.appendChild(label);
+
+      const content = document.createElement("p");
+      content.className = "segment-text";
+      content.textContent = text;
+      card.appendChild(content);
+
+      return card;
+    }
+
+    function makeDetectedRow(ref) {
+      const row = document.createElement("div");
+      row.className = "detected-row";
+      row.style.borderColor = state.expandedDetectedIds.has(ref.id)
+        ? sourceColor(ref.source)
+        : "var(--border)";
+      row.style.setProperty("--chip-color", sourceColor(ref.source));
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "detected-toggle";
+
+      const left = document.createElement("span");
+      left.className = "detected-left";
+
+      const caret = document.createElement("span");
+      caret.className = "muted";
+      caret.textContent = state.expandedDetectedIds.has(ref.id) ? "^" : "v";
+      left.appendChild(caret);
+
+      const label = document.createElement("span");
+      label.className = "detected-label";
+      label.textContent = ref.displayRef;
+      label.title = ref.displayRef;
+      left.appendChild(label);
+
+      const sourceTag = document.createElement("span");
+      sourceTag.className = "source-tag";
+      sourceTag.textContent = ref.source;
+      left.appendChild(sourceTag);
+
+      if (ref.source === "paraphrase" && typeof ref.confidence === "number") {
+        const confidence = document.createElement("span");
+        confidence.className = "confidence";
+        confidence.textContent = `${Math.round(ref.confidence * 100)}%`;
+        left.appendChild(confidence);
+      }
+
+      button.appendChild(left);
+
+      const time = document.createElement("span");
+      time.className = "muted";
+      time.style.fontSize = "0.75rem";
+      time.textContent = formatTimestamp(ref.timestamp);
+      button.appendChild(time);
+
+      button.addEventListener("click", () => {
+        if (state.expandedDetectedIds.has(ref.id)) {
+          state.expandedDetectedIds.delete(ref.id);
+        } else {
+          state.expandedDetectedIds.add(ref.id);
+        }
+        render();
+      });
+
+      row.appendChild(button);
+
+      if (state.expandedDetectedIds.has(ref.id)) {
+        const content = document.createElement("div");
+        content.className = "detected-content";
+
+        const box = document.createElement("div");
+        box.className = "box";
+
+        const text = document.createElement("p");
+        text.appendChild(makeHighlightedVerseNode(ref.verseText || "", ref.highlight || []));
+        box.appendChild(text);
+
+        if (ref.matchedPhrase) {
+          const matched = document.createElement("div");
+          matched.className = "matched";
+          matched.textContent = `Matched: "${ref.matchedPhrase}"`;
+          box.appendChild(matched);
+        }
+
+        if (ref.transcriptText) {
+          const origin = document.createElement("div");
+          origin.className = "muted";
+          origin.style.fontSize = "0.78rem";
+          origin.textContent = `Transcript: "${ref.transcriptText}"`;
+          box.appendChild(origin);
+        }
+
+        content.appendChild(box);
+        row.appendChild(content);
+      }
+
+      return row;
+    }
+
+    function render() {
+      el.transcriptList.innerHTML = "";
+
+      if (!state.payload) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Upload a transcript JSON file to render it.";
+        el.transcriptList.appendChild(empty);
+        el.detectedPanel.classList.add("hidden");
+        el.meta.textContent = "No file loaded";
+        return;
+      }
+
+      const query = state.searchQuery.trim().toLowerCase();
+      const filteredSegments = [];
+      let lastWasMusic = false;
+
+      for (const segment of state.payload.segments) {
+        const text = segment.text || "";
+        if (shouldHideTranscriptText(text)) continue;
+
+        const isMusic = isMusicMarker(text);
+        if (isMusic && lastWasMusic) continue;
+        lastWasMusic = isMusic;
+
+        if (query && !text.toLowerCase().includes(query)) continue;
+        filteredSegments.push(segment);
+      }
+
+      const hasInterim = !!state.payload.interim;
+      let interimMatches = false;
+      if (hasInterim) {
+        const interim = state.payload.interim;
+        interimMatches =
+          !shouldHideTranscriptText(interim) &&
+          (!query || interim.toLowerCase().includes(query));
+
+        if (
+          interimMatches &&
+          isMusicMarker(interim) &&
+          filteredSegments.length > 0 &&
+          isMusicMarker(filteredSegments[filteredSegments.length - 1].text)
+        ) {
+          interimMatches = false;
+        }
+      }
+
+      let renderedCount = 0;
+      for (const segment of filteredSegments) {
+        const card = makeSegmentCard(segment);
+        if (card) {
+          el.transcriptList.appendChild(card);
+          renderedCount += 1;
+        }
+      }
+
+      if (state.showTranscript && interimMatches) {
+        el.transcriptList.appendChild(makeInterimCard(state.payload.interim));
+        renderedCount += 1;
+      }
+
+      if (renderedCount === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = query
+          ? `No transcript matches "${state.searchQuery}".`
+          : "No transcript rows match the current display options.";
+        el.transcriptList.appendChild(empty);
+      }
+
+      const refs = state.payload.detectedReferences || [];
+      if (refs.length === 0) {
+        el.detectedPanel.classList.add("hidden");
+      } else {
+        el.detectedPanel.classList.remove("hidden");
+        el.detectedTitle.textContent = `Detected References (${refs.length})`;
+        el.detectedToggleLabel.textContent = state.detectedCollapsed ? "Expand" : "Collapse";
+
+        if (state.detectedCollapsed) {
+          el.detectedBody.classList.add("hidden");
+        } else {
+          el.detectedBody.classList.remove("hidden");
+          el.detectedBody.innerHTML = "";
+
+          const detectedVisible = query
+            ? refs.filter((ref) => {
+                const bag = [
+                  ref.displayRef,
+                  ref.reference,
+                  ref.verseText,
+                  ref.transcriptText,
+                  ref.matchedPhrase,
+                ]
+                  .join(" ")
+                  .toLowerCase();
+                return bag.includes(query);
+              })
+            : refs;
+
+          if (detectedVisible.length === 0) {
+            const emptyDetected = document.createElement("div");
+            emptyDetected.className = "empty";
+            emptyDetected.textContent = "No detected references match the search query.";
+            el.detectedBody.appendChild(emptyDetected);
+          } else {
+            for (const ref of detectedVisible) {
+              el.detectedBody.appendChild(makeDetectedRow(ref));
+            }
+          }
+        }
+      }
+
+      const generatedAt = state.payload.generatedAt
+        ? `Generated: ${new Date(state.payload.generatedAt).toLocaleString()}`
+        : "Generated: unknown";
+      el.meta.textContent =
+        `${state.loadedFileName || "JSON loaded"} | Segments: ${state.payload.segments.length} | ${generatedAt}`;
+    }
+
+    async function loadFile(file) {
+      clearError();
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        state.payload = normalizePayload(parsed);
+        state.loadedFileName = file.name || "transcript.json";
+        state.expandedInlineRefIds.clear();
+        state.expandedDetectedIds.clear();
+        render();
+      } catch (error) {
+        state.payload = null;
+        state.loadedFileName = "";
+        render();
+        showError(`Could not parse JSON: ${error instanceof Error ? error.message : "Unknown error"}`);
+      }
+    }
+
+    function clearLoadedFile() {
+      state.payload = null;
+      state.loadedFileName = "";
+      state.expandedInlineRefIds.clear();
+      state.expandedDetectedIds.clear();
+      el.fileInput.value = "";
+      clearError();
+      render();
+    }
+
+    el.chooseBtn.addEventListener("click", () => el.fileInput.click());
+    el.fileInput.addEventListener("change", (event) => {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      const file = input.files && input.files[0];
+      loadFile(file);
+    });
+
+    el.clearBtn.addEventListener("click", clearLoadedFile);
+
+    el.showTranscript.addEventListener("change", (event) => {
+      const input = event.target;
+      state.showTranscript = !!(input instanceof HTMLInputElement && input.checked);
+      render();
+    });
+
+    el.showRefs.addEventListener("change", (event) => {
+      const input = event.target;
+      state.showScriptureRefs = !!(input instanceof HTMLInputElement && input.checked);
+      render();
+    });
+
+    el.showKeyPoints.addEventListener("change", (event) => {
+      const input = event.target;
+      state.showKeyPoints = !!(input instanceof HTMLInputElement && input.checked);
+      render();
+    });
+
+    el.searchInput.addEventListener("input", (event) => {
+      const input = event.target;
+      state.searchQuery = input instanceof HTMLInputElement ? input.value : "";
+      render();
+    });
+
+    el.detectedHeader.addEventListener("click", () => {
+      state.detectedCollapsed = !state.detectedCollapsed;
+      render();
+    });
+
+    function handleDragState(event, isActive) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (isActive) {
+        el.dropZone.classList.add("active");
+      } else {
+        el.dropZone.classList.remove("active");
+      }
+    }
+
+    ["dragenter", "dragover"].forEach((name) => {
+      el.dropZone.addEventListener(name, (event) => handleDragState(event, true));
+    });
+    ["dragleave", "drop"].forEach((name) => {
+      el.dropZone.addEventListener(name, (event) => handleDragState(event, false));
+    });
+    el.dropZone.addEventListener("drop", (event) => {
+      const dropped = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+      if (dropped) loadFile(dropped);
+    });
+
+    render();
+  </script>
+</body>
+</html>
