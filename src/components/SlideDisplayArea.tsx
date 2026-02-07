@@ -26,6 +26,7 @@ interface SlideDisplayAreaProps {
   onMakeSlideLive: (slide: Slide) => void;
   onTakeOffSlide?: (slide: Slide) => void; // New prop for "Take Off" action
   onAddSlide: (layout: LayoutType) => void;
+  onDuplicateSlide: (slideId: string) => void;
   onDeleteSlide: (slideId: string) => void;
   onChangeSlideLayout: (slideId: string, newLayout: LayoutType) => void; // New prop
   onChangeTimerSession?: (
@@ -56,6 +57,7 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
   onMakeSlideLive,
   onTakeOffSlide,
   onAddSlide,
+  onDuplicateSlide,
   onDeleteSlide,
   onChangeSlideLayout, // New prop
   onChangeTimerSession, // New prop for timer session
@@ -85,10 +87,17 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
   );
   const [showSearchOptions, setShowSearchOptions] = useState<boolean>(false);
   const [hasFocusedSearch, setHasFocusedSearch] = useState<boolean>(false);
+  const [slideContextMenu, setSlideContextMenu] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    slideId: string | null;
+  }>({ isOpen: false, x: 0, y: 0, slideId: null });
 
   useEffect(() => {
     setEditingSlideId(null);
     setEditingLines([]);
+    setSlideContextMenu({ isOpen: false, x: 0, y: 0, slideId: null });
   }, [playlistItem]);
 
   const getLayoutText = (layout: LayoutType): string => {
@@ -216,6 +225,10 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
     }
     // Clear the live state - this will make "Go Live" button available again
     setLiveSlideId(null);
+  };
+
+  const closeSlideContextMenu = () => {
+    setSlideContextMenu({ isOpen: false, x: 0, y: 0, slideId: null });
   };
 
   const isLiveLinked =
@@ -536,7 +549,15 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
             className={`slide-item-card ${
               liveSlideId === slide.id ? "live" : ""
             } ${slide.isAutoScripture ? "auto-scripture" : ""}`}
-            onContextMenu={(e) => e.preventDefault()}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setSlideContextMenu({
+                isOpen: true,
+                x: e.clientX,
+                y: e.clientY,
+                slideId: slide.id,
+              });
+            }}
           >
             <div className="slide-layout-picker-container">
               <select
@@ -788,14 +809,45 @@ const SlideDisplayArea: React.FC<SlideDisplayAreaProps> = ({
           title="Activate Presentation for This Slide"
         />
       )}
-      {/* ContextMenu kept for compatibility; slide context menu was removed in favor of playlist-item context menu */}
-      <ContextMenu
-        isOpen={false}
-        x={0}
-        y={0}
-        menuItems={[]}
-        onClose={() => {}}
-      />
+      {slideContextMenu.slideId &&
+        (() => {
+          const targetSlide = playlistItem?.slides.find(
+            (s) => s.id === slideContextMenu.slideId
+          );
+          if (!targetSlide) return null;
+
+          const isTargetLive = liveSlideId === targetSlide.id;
+
+          return (
+            <ContextMenu
+              isOpen={slideContextMenu.isOpen}
+              x={slideContextMenu.x}
+              y={slideContextMenu.y}
+              menuItems={[
+                {
+                  label: "Edit",
+                  onClick: () => handleEdit(targetSlide),
+                  disabled: isTargetLive,
+                },
+                {
+                  label: "Go Live",
+                  onClick: () => handleMakeLive(targetSlide),
+                  disabled: isTargetLive,
+                },
+                { isSeparator: true },
+                {
+                  label: "Duplicate",
+                  onClick: () => onDuplicateSlide(targetSlide.id),
+                },
+                {
+                  label: "Delete",
+                  onClick: () => onDeleteSlide(targetSlide.id),
+                },
+              ]}
+              onClose={closeSlideContextMenu}
+            />
+          );
+        })()}
     </div>
   );
 };
