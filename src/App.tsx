@@ -647,7 +647,10 @@ function AppContent({
             </div>
           )}
           {/* Keep all components mounted but show/hide based on route */}
-          <div style={{ display: isMainPage ? "block" : "none" }}>
+          <div style={{
+            display: isMainPage ? "flex" : "none",
+            ...(isMainPage ? { flex: 1, minHeight: 0, overflow: "hidden" } : {}),
+          }}>
             <MainApplicationPage />
           </div>
           <div style={{ display: isSettingsPage ? "block" : "none" }}>

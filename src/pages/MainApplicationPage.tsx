@@ -2630,10 +2630,9 @@ const MainApplicationPage: React.FC = () => {
   // Style objects using CSS variables. These could also be classes in App.css
   const pageLayoutStyle: React.CSSProperties = {
     display: "flex",
-    // The nav bar in App.tsx is assumed to be around 50px.
-    // If its height changes, this calculation needs to adapt.
-    // Consider using flexbox for the main App layout to avoid magic numbers.
-    height: "calc(100vh - 51px)", // Assuming nav is 50px + 1px border
+    flex: 1,
+    minHeight: 0,
+    height: "100%",
     backgroundColor: "var(--app-bg-color)",
   };
 
@@ -2652,13 +2651,16 @@ const MainApplicationPage: React.FC = () => {
 
   const rightColumnStyle: React.CSSProperties = {
     flexGrow: 1,
+    minWidth: 0,
+    minHeight: 0,
     display: "flex",
     flexDirection: "column",
-    overflowY: "auto",
+    overflow: "hidden",
     backgroundColor: "var(--app-bg-color)",
   };
 
   const rightColumnHeaderStyle: React.CSSProperties = {
+    flexShrink: 0,
     padding: "var(--spacing-3) var(--spacing-4)",
     borderBottom: "1px solid var(--border)",
     display: "flex",
@@ -2672,6 +2674,7 @@ const MainApplicationPage: React.FC = () => {
     width: "32%",
     minWidth: "320px",
     maxWidth: "520px",
+    minHeight: 0,
     borderLeft: "1px solid var(--app-border-color)",
     backgroundColor: "var(--app-bg-color)",
     display: "flex",
@@ -3111,7 +3114,7 @@ const MainApplicationPage: React.FC = () => {
         </div>
         <div
           className="slide-display-scroll-container"
-          style={{ padding: "20px", flexGrow: 1, overflowY: "auto" }}
+          style={{ padding: "20px", flexGrow: 1, minHeight: 0, overflowY: "auto" }}
         >
           <SlideDisplayArea
             playlistItem={currentPlaylistItem}
