@@ -2,6 +2,22 @@
 
 All notable changes to SmartVerses will be documented in this file.
 
+## [0.7.11] - 2026-02-06
+
+### Added
+- **Report Missing Scripture Detection**: New feature to report when scripture references are not detected in transcript segments; sends segment data with context to help improve detection accuracy
+- **Report Transcript API**: Added HTTP API service for reporting missing scripture detection with documentation (see `docs/REPORT_TRANSCRIPT_API_SPEC.md`)
+- **Standalone Transcript Viewer**: Added `smart-versys-transcript-viewer.html` for viewing transcripts outside the main app
+
+### Fixed
+- **Slides Page Scroll Lock**: Fixed scroll lock issue that was hiding the Import header on the Slides page
+- **ProPresenter Warning**: Only log ProPresenter activation warning when activation is actually configured (prevents unnecessary warnings for no-template items)
+- **Report Button Loading State**: Disabled all report buttons while any report is loading to prevent multiple simultaneous submissions and match handler guard behavior
+
+### Changed
+- **Slide Workflows**: Improved slide workflows and transcript/reference handling for better user experience
+- **Transcript Handling**: Enhanced transcript and reference handling in SmartVerses page
+
 ## [0.7.10] - 2026-02-01
 
 ### Added
