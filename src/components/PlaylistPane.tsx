@@ -162,19 +162,21 @@ const PlaylistPane: React.FC<PlaylistPaneProps> = ({
                   >
                     {item.title}
                   </span>
-                  <span
-                    className="template-badge playlist-badge"
-                    style={{
-                      backgroundColor:
-                        item.templateColor || "var(--app-button-bg-color)",
-                      color:
-                        item.templateColor && isColorDark(item.templateColor)
-                          ? "white"
-                          : "black",
-                    }}
-                  >
-                    {item.templateName}
-                  </span>
+                  {item.templateName.trim() && (
+                    <span
+                      className="template-badge playlist-badge"
+                      style={{
+                        backgroundColor:
+                          item.templateColor || "var(--app-button-bg-color)",
+                        color:
+                          item.templateColor && isColorDark(item.templateColor)
+                            ? "white"
+                            : "black",
+                      }}
+                    >
+                      {item.templateName}
+                    </span>
+                  )}
                   {item.liveSlidesSessionId && (item.liveSlidesLinked ?? true) && (
                     <span
                       className="template-badge playlist-badge"

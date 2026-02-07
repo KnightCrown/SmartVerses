@@ -11,6 +11,9 @@ import ImportModal from "../components/ImportModal";
 import ImportFromLiveSlidesModal from "../components/ImportFromLiveSlidesModal";
 import ImportFromNetworkModal from "../components/ImportFromNetworkModal";
 import RenameModal from "../components/RenameModal";
+import CreateBlankPresentationModal, {
+  BlankPresentationAttachment,
+} from "../components/CreateBlankPresentationModal";
 import ConfirmDialog from "../components/ConfirmDialog";
 import TypingUrlModal from "../components/TypingUrlModal";
 import ActivatePresentationModal from "../components/ActivatePresentationModal";
@@ -65,6 +68,9 @@ import { loadNetworkSyncSettings } from "../services/networkSyncService";
 import { useStageAssist } from "../contexts/StageAssistContext";
 import AIAutomationDropdown from "../components/AIAutomationDropdown";
 import { sendSlidesToDisplay } from "../services/displayService";
+
+const LIVE_SLIDES_TEMPLATE_TAG = "Live Slides";
+const LIVE_SLIDES_TEMPLATE_COLOR = "#8b5cf6";
 
 const MainApplicationPage: React.FC = () => {
   // Access schedule from StageAssist context for auto-timer assignment
@@ -916,7 +922,10 @@ const MainApplicationPage: React.FC = () => {
       return;
     }
 
-    const isLiveSlidesItem = !!playlistItem.liveSlidesSessionId;
+    const isLiveSlidesItem =
+      !!playlistItem.liveSlidesSessionId ||
+      playlistItem.templateName === LIVE_SLIDES_TEMPLATE_TAG;
+    const isNoTemplateItem = !playlistItem.templateName.trim();
 
     // Find the template used by this playlistItem
     // This assumes playlistItem.templateName is reliable for lookup.
@@ -933,7 +942,7 @@ const MainApplicationPage: React.FC = () => {
         playlistItem.defaultProPresenterActivation
       );
       
-      if (!isLiveSlidesItem && !hasProPresenterActivation) {
+      if (!isLiveSlidesItem && !hasProPresenterActivation && !isNoTemplateItem) {
         console.error(
           `Template '${playlistItem.templateName}' not found for playlist item '${playlistItem.title}'.`
         );
@@ -941,7 +950,7 @@ const MainApplicationPage: React.FC = () => {
         return;
       }
       
-      if (!isLiveSlidesItem) {
+      if (!isLiveSlidesItem && hasProPresenterActivation) {
         console.warn(
           `Template '${playlistItem.templateName}' not found, but ProPresenter activation is configured. Skipping file output.`
         );
@@ -949,8 +958,8 @@ const MainApplicationPage: React.FC = () => {
     }
 
     // Freeze this slide from incoming notepad updates while it is live.
-    if (isLiveSlidesItem) {
-      const sid = playlistItem.liveSlidesSessionId as string;
+    if (isLiveSlidesItem && playlistItem.liveSlidesSessionId) {
+      const sid = playlistItem.liveSlidesSessionId;
       setLiveSlidesLockBySession((prev) => ({
         ...prev,
         [sid]: slide.order,
@@ -1335,6 +1344,19 @@ const MainApplicationPage: React.FC = () => {
     [liveTranscriptChunks, liveInterimTranscript]
   );
 
+  const handleClearTranscript = useCallback(() => {
+    setLiveTranscriptChunks([]);
+    setLiveInterimTranscript("");
+    setTranscriptSearchQuery("");
+    setAutoScrollPaused(false);
+    requestAnimationFrame(() => {
+      const el = transcriptScrollRef.current;
+      if (el) {
+        el.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    });
+  }, []);
+
   const handleStartTranscriptionRequest = useCallback(() => {
     window.dispatchEvent(new CustomEvent("transcription-start-request"));
   }, []);
@@ -1365,12 +1387,15 @@ const MainApplicationPage: React.FC = () => {
       return;
     }
 
-    const isLiveSlidesItem = !!playlistItem.liveSlidesSessionId;
+    const isLiveSlidesItem =
+      !!playlistItem.liveSlidesSessionId ||
+      playlistItem.templateName === LIVE_SLIDES_TEMPLATE_TAG;
+    const isNoTemplateItem = !playlistItem.templateName.trim();
     const template = isLiveSlidesItem
       ? undefined
       : templates.find((t) => t.name === playlistItem.templateName);
 
-    if (!template && !isLiveSlidesItem) {
+    if (!template && !isLiveSlidesItem && !isNoTemplateItem) {
       console.warn("Template not found for take off action");
       return;
     }
@@ -1454,7 +1479,6 @@ const MainApplicationPage: React.FC = () => {
     }
 
     if (isLiveSlidesItem) {
-      const sid = playlistItem.liveSlidesSessionId as string;
       const shouldClear =
         (liveSlidesRule?.clearTextFileOnTakeOff ??
           liveSlidesSettings?.proPresenterActivation?.clearTextFileOnTakeOff) !==
@@ -1469,22 +1493,26 @@ const MainApplicationPage: React.FC = () => {
           await clearTextFiles(basePath, prefix);
         }
       }
-      // Clear live lock and notify notepad so it can unlock that slide's lines.
-      setLiveSlidesLockBySession((prev) => {
-        const next = { ...prev };
-        delete next[sid];
-        return next;
-      });
-      try {
-        await invoke("broadcast_live_slides_message", {
-          message: JSON.stringify({
-            type: "live_slide_index",
-            session_id: sid,
-            slide_index: null,
-          } as const),
+
+      if (playlistItem.liveSlidesSessionId) {
+        const sid = playlistItem.liveSlidesSessionId;
+        // Clear live lock and notify notepad so it can unlock that slide's lines.
+        setLiveSlidesLockBySession((prev) => {
+          const next = { ...prev };
+          delete next[sid];
+          return next;
         });
-      } catch (_) {
-        // Server may not be running; ignore.
+        try {
+          await invoke("broadcast_live_slides_message", {
+            message: JSON.stringify({
+              type: "live_slide_index",
+              session_id: sid,
+              slide_index: null,
+            } as const),
+          });
+        } catch (_) {
+          // Server may not be running; ignore.
+        }
       }
     }
   };
@@ -1604,6 +1632,67 @@ const MainApplicationPage: React.FC = () => {
     }
     // Optionally, you might want to auto-select the new slide for editing
     // This would require passing setEditingSlideId and setEditingLines down or a callback
+  };
+
+  const handleDuplicateSlide = (slideIdToDuplicate: string) => {
+    if (!selectedPlaylistId || !selectedItemId) {
+      alert("Cannot duplicate slide: No playlist or item selected.");
+      return;
+    }
+    if (!currentPlaylistItem) return;
+
+    const sourceIndex = currentPlaylistItem.slides.findIndex(
+      (s) => s.id === slideIdToDuplicate
+    );
+    if (sourceIndex < 0) return;
+
+    const sourceSlide = currentPlaylistItem.slides[sourceIndex];
+    const duplicateSlide: Slide = {
+      ...sourceSlide,
+      id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      order: sourceSlide.order + 1,
+    };
+
+    const nextSlides = [
+      ...currentPlaylistItem.slides.slice(0, sourceIndex + 1),
+      duplicateSlide,
+      ...currentPlaylistItem.slides.slice(sourceIndex + 1),
+    ].map((slide, index) => ({ ...slide, order: index + 1 }));
+
+    const isLiveSlidesItem =
+      !!currentPlaylistItem.liveSlidesSessionId &&
+      (currentPlaylistItem.liveSlidesLinked ?? true);
+    const liveSessionId = currentPlaylistItem.liveSlidesSessionId;
+    const nextRaw = isLiveSlidesItem
+      ? buildRawTextFromSlides(nextSlides)
+      : undefined;
+
+    setPlaylists((prevPlaylists) =>
+      prevPlaylists.map((p) => {
+        if (p.id === selectedPlaylistId) {
+          return {
+            ...p,
+            items: p.items.map((item) => {
+              if (item.id === selectedItemId) {
+                return {
+                  ...item,
+                  slides: nextSlides,
+                  liveSlidesCachedRawText: isLiveSlidesItem
+                    ? nextRaw
+                    : item.liveSlidesCachedRawText,
+                };
+              }
+              return item;
+            }),
+          };
+        }
+        return p;
+      })
+    );
+
+    if (isLiveSlidesItem && liveSessionId && nextRaw !== undefined) {
+      syncLiveSlidesSession(liveSessionId, nextSlides, nextRaw);
+    }
   };
 
   const handleDeleteSlide = (slideIdToDelete: string) => {
@@ -1939,20 +2028,38 @@ const MainApplicationPage: React.FC = () => {
     return true;
   };
 
-  const handleCreateBlankPresentation = (title: string) => {
+  const handleCreateBlankPresentation = (
+    title: string,
+    attachment: BlankPresentationAttachment
+  ) => {
     if (!selectedPlaylistId) {
       alert("No playlist selected to add the item to.");
       return;
     }
 
-    if (templates.length === 0) {
-      alert("No templates available. Please create a template first.");
-      return;
+    const timestamp = Date.now();
+    let defaultLayout: LayoutType = "one-line";
+    let templateName = "";
+    let templateColor = "";
+    let defaultProPresenterActivation:
+      | PlaylistItem["defaultProPresenterActivation"]
+      | undefined;
+
+    if (attachment.type === "template") {
+      const template = templates.find((t) => t.name === attachment.templateName);
+      if (!template) {
+        alert(`Template "${attachment.templateName}" not found.`);
+        return;
+      }
+      templateName = template.name;
+      templateColor = template.color || "#808080";
+      defaultLayout = template.availableLayouts[0] || "one-line";
+      defaultProPresenterActivation = template.proPresenterActivation;
+    } else if (attachment.type === "live-slides") {
+      templateName = LIVE_SLIDES_TEMPLATE_TAG;
+      templateColor = LIVE_SLIDES_TEMPLATE_COLOR;
     }
 
-    const template = templates[0];
-    const defaultLayout = template.availableLayouts[0] || "one-line";
-    const timestamp = Date.now();
     const blankSlide: Slide = {
       id: `slide-${timestamp}-0`,
       text: "",
@@ -1964,9 +2071,9 @@ const MainApplicationPage: React.FC = () => {
       id: `item-${timestamp}`,
       title,
       slides: [blankSlide],
-      templateName: template.name,
-      templateColor: template.color || "#808080",
-      defaultProPresenterActivation: template.proPresenterActivation,
+      templateName,
+      templateColor,
+      defaultProPresenterActivation,
     };
 
     setPlaylists((prevPlaylists) =>
@@ -3091,6 +3198,7 @@ const MainApplicationPage: React.FC = () => {
               handleTakeOffSlide(slide, currentPlaylistItem)
             }
             onAddSlide={handleAddSlide}
+            onDuplicateSlide={handleDuplicateSlide}
             onDeleteSlide={handleDeleteSlide}
             onChangeSlideLayout={handleChangeSlideLayout}
             onChangeTimerSession={handleChangeTimerSession}
@@ -3253,6 +3361,15 @@ const MainApplicationPage: React.FC = () => {
                     ]}
                     actions={[
                       {
+                        id: "delete",
+                        label: "Delete transcript",
+                        icon: <FaTrash size={12} />,
+                        onClick: () => {
+                          handleClearTranscript();
+                          setTranscriptMenuOpen(false);
+                        },
+                      },
+                      {
                         id: "download-text",
                         label: "Download as text",
                         icon: <FaDownload size={12} />,
@@ -3261,6 +3378,7 @@ const MainApplicationPage: React.FC = () => {
                           setTranscriptMenuOpen(false);
                         },
                       },
+                      { id: "divider", kind: "separator" },
                       {
                         id: "download-json",
                         label: "Download as JSON",
@@ -3334,9 +3452,23 @@ const MainApplicationPage: React.FC = () => {
               color: "var(--app-text-color-secondary)",
               fontSize: "0.85rem",
               display: "flex",
-              justifyContent: "flex-end",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "10px",
             }}
           >
+            <button
+              onClick={() => {
+                const el = transcriptScrollRef.current;
+                if (!el) return;
+                el.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="secondary btn-sm"
+              title="Scroll transcript to top"
+              style={{ whiteSpace: "nowrap" }}
+            >
+              Top
+            </button>
             <label
               style={{
                 display: "flex",
@@ -3710,12 +3842,11 @@ const MainApplicationPage: React.FC = () => {
           renameTarget?.type === "item" ? "Rename Item" : "Rename Playlist"
         }
       />
-      <RenameModal
+      <CreateBlankPresentationModal
         isOpen={isCreateBlankOpen}
         onClose={() => setIsCreateBlankOpen(false)}
-        onRename={handleCreateBlankPresentation}
-        currentName=""
-        title="New Blank Presentation"
+        onCreate={handleCreateBlankPresentation}
+        templates={templates}
       />
       <ConfirmDialog
         isOpen={!!pendingDelete}

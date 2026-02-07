@@ -1,10 +1,13 @@
-import { beforeAll, afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BUILTIN_KJV_ID, getTranslationById } from "../src/services/bibleLibraryService";
-import { detectAndLookupReferences } from "../src/services/smartVersesBibleService";
+import {
+  detectAndLookupReferences,
+  resetParseContext,
+} from "../src/services/smartVersesBibleService";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +45,10 @@ describe("Bible verse loading", () => {
 
   afterAll(() => {
     globalThis.fetch = originalFetch;
+  });
+
+  beforeEach(() => {
+    resetParseContext();
   });
 
   it("loads one verse per book and at least 10 verses each", async () => {
@@ -89,5 +96,57 @@ describe("Bible verse loading", () => {
     });
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].verseText).toBeTruthy();
+  });
+
+  it("does not infer context from ordinary numbered speech", async () => {
+    await detectAndLookupReferences("2 Timothy 4:7", {
+      translationId: BUILTIN_KJV_ID,
+    });
+
+    const results = await detectAndLookupReferences("Three things to note.", {
+      translationId: BUILTIN_KJV_ID,
+    });
+    expect(results).toEqual([]);
+  });
+
+  it("does not map noisy chapter/verse sentences to previous context", async () => {
+    await detectAndLookupReferences("1 Corinthians 16:13", {
+      translationId: BUILTIN_KJV_ID,
+    });
+
+    const results = await detectAndLookupReferences(
+      "Abaco, chapter two, verse four, he said.",
+      {
+        translationId: BUILTIN_KJV_ID,
+      }
+    );
+    expect(results).toEqual([]);
+  });
+
+  it("still supports explicit context continuation like 'verse 20'", async () => {
+    await detectAndLookupReferences("Romans 4:17", {
+      translationId: BUILTIN_KJV_ID,
+    });
+
+    const results = await detectAndLookupReferences("verse 20", {
+      translationId: BUILTIN_KJV_ID,
+    });
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].displayRef).toBe("Romans 4:20");
+  });
+
+  it("supports contextual chapter + verse phrases in transcript fragments", async () => {
+    await detectAndLookupReferences("Acts 5:1", {
+      translationId: BUILTIN_KJV_ID,
+    });
+
+    const results = await detectAndLookupReferences(
+      "Chapter 2 and verse 6. Now, when this was noised abroad,",
+      {
+        translationId: BUILTIN_KJV_ID,
+      }
+    );
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].displayRef).toBe("Acts 2:6");
   });
 });

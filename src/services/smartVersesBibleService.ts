@@ -995,6 +995,33 @@ function isLikelyNumberedList(text: string): boolean {
   return pattern.test(normalized);
 }
 
+function isLikelyContextFallbackReference(text: string): boolean {
+  const normalized = String(text || "")
+    .toLowerCase()
+    .replace(/[^\w\s:.-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) return false;
+  if (containsBibleBook(normalized)) return false;
+
+  // Accept leading context phrases inside longer transcript fragments.
+  // Examples:
+  // - "chapter 2 and verse 6 now when..."
+  // - "from chapter 3 verse 5 ..."
+  const leadingChapterPattern =
+    /^(?:(?:in|from|and|then|now)\s+)*(?:chapter|ch\.?)\s+\d{1,3}(?:\s*(?:,|\band\b)?\s*(?:verse|verses|vv?\.?|v|vs)\s+\d{1,3}(?:\s*(?:-|to|and)\s*\d{1,3})?)?/i;
+  if (leadingChapterPattern.test(normalized)) return true;
+
+  const leadingVersePattern =
+    /^(?:(?:in|from|and|then|now)\s+)*(?:verse|verses|vv?\.?|v|vs)\s+\d{1,3}(?:\s*(?:-|to|and)\s*\d{1,3})?/i;
+  if (leadingVersePattern.test(normalized)) return true;
+
+  const numericPattern =
+    /^\d{1,3}(?::\d{1,3})?(?:\s*(?:-|to|and)\s*\d{1,3})?$/i;
+  return numericPattern.test(normalized);
+}
+
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
@@ -1137,6 +1164,7 @@ export function parseVerseReference(
 
   let passages: ParsedBibleReference[] | null = null;
   let hasBook = false;
+  let allowContextFallback = false;
 
   try {
     // Step 1: Preprocess the reference
@@ -1169,13 +1197,16 @@ export function parseVerseReference(
     textToProcess = normalizeMissingBookChapterSpace(textToProcess);
     textToProcess = normalizeConcatenatedReferences(textToProcess);
 
+    allowContextFallback =
+      !hasBook && isLikelyContextFallbackReference(textToProcess);
+
     if (isDebugBibleParse()) {
       console.log("[SmartVerses][BibleParse] raw:", reference);
       console.log("[SmartVerses][BibleParse] normalized:", textToProcess);
     }
 
     // Check for context-only references (e.g., "chapter 3 verse 5", "verses 2 and 3")
-    if (!hasBook) {
+    if (allowContextFallback) {
       const contextual = parseContextualVerseReferences(textToProcess, translationId);
       if (contextual && contextual.length > 0) {
         updateContextFromPassages(contextual, reference);
@@ -1280,7 +1311,7 @@ export function parseVerseReference(
   // (e.g., reusing the previous passage's book).
   if (
     (!passages || passages.length === 0) &&
-    !hasBook &&
+    allowContextFallback &&
     lastParsedContext.fullReference
   ) {
     try {
@@ -1298,7 +1329,7 @@ export function parseVerseReference(
   // Also try with the old context variable as a final fallback
   if (
     (!passages || passages.length === 0) &&
-    !hasBook &&
+    allowContextFallback &&
     legacyContext &&
     legacyContext !== reference
   ) {
@@ -1315,7 +1346,7 @@ export function parseVerseReference(
   }
 
   // If still no passages and context exists, try regex extraction
-  if ((!passages || passages.length === 0) && legacyContext) {
+  if ((!passages || passages.length === 0) && allowContextFallback && legacyContext) {
     const extracted = extractChapterAndVerse(reference);
     if (extracted.chapter || extracted.verse) {
       const contextParts = legacyContext.match(/^(.+?)\s+(\d+):(\d+)$/);
