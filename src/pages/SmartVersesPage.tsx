@@ -5320,14 +5320,14 @@ const SmartVersesPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleReportSegment(segment.id)}
-                        disabled={isReported || isReportLoading}
+                        disabled={isReported || loadingReportSegmentId != null}
                         className="icon-button"
                         title={isReported ? "Reported" : "Report missing scripture detection"}
                         style={{
                           padding: "6px",
                           flexShrink: 0,
                           color: isReported ? "#22c55e" : "var(--app-text-color-secondary)",
-                          cursor: isReported || isReportLoading ? "default" : "pointer",
+                          cursor: isReported || loadingReportSegmentId != null ? "default" : "pointer",
                         }}
                       >
                         {isReportLoading ? (
