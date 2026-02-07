@@ -950,7 +950,7 @@ const MainApplicationPage: React.FC = () => {
         return;
       }
       
-      if (!isLiveSlidesItem) {
+      if (!isLiveSlidesItem && hasProPresenterActivation) {
         console.warn(
           `Template '${playlistItem.templateName}' not found, but ProPresenter activation is configured. Skipping file output.`
         );
